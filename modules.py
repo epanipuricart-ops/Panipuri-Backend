@@ -44,7 +44,9 @@ def authenticate(tok):
         return False, None 
 
 def create_dict(t):
-    if t == '3':
+    if t == '2':
+        return [{'name': 'n1'},{'name': 'n2'}]
+    elif t == '3':
         return [{"name": "n1"},{"name":"n2"},{"name":"n3"}]
     elif t == '6':
         return [{"name": "n1"},{"name":"n2"},{"name":"n3"}, {"name": "n4"}, {"name": "n5"}, {"name": "n6"}]
@@ -98,6 +100,39 @@ def sort(uid):
                 arr.append(d1)
                 arr.append(d2)
                 arr.append(d3)
+                return True,arr
+
+        if t == '2':
+                arr = []
+                d1 = {}
+                d2 = {}
+                l1 = []
+                l2 = []
+
+                for ele in response["data"]:   
+                    if ele['name'] == 'n1':
+                        a = {}
+                        a['date'] = ele['date']
+                        a['status'] = ele['status']
+                        #a['low'] = ele['low']
+                        l1.append(a)
+                    else:
+                        a = {}
+                        a['date'] = ele['date']
+                        a['status'] = ele['status']
+                        #a['low'] = ele['low']
+                        l2.append(a)
+
+                d1['name'] = 'n1'
+                d2['name'] = 'n2'
+                if len(l1) < 50:
+                    d1['data'] = l1
+                    d2['data'] = l2
+                else:
+                    d1['data'] = l1[-50:]
+                    d2['data'] = l2[-50:]
+                arr.append(d1)
+                arr.append(d2)
                 return True,arr
             
         else:
@@ -153,6 +188,38 @@ def sort_level(uid):
                 arr.append(d1)
                 arr.append(d2)
                 arr.append(d3)
+                return True,arr
+
+        elif t == '2':
+                arr = []
+                d1 = {}
+                d2 = {}
+                l1 = []
+                l2 = []
+
+                for ele in response["data"]:   
+                    if ele['name'] == 'n1':
+                        a = {}
+                        a['date'] = ele['date']
+                        a['low'] = ele['low']
+                        #a['low'] = ele['low']
+                        l1.append(a)
+                    else:
+                        a = {}
+                        a['date'] = ele['date']
+                        a['low'] = ele['low']
+                        #a['low'] = ele['low']
+                        l2.append(a)
+                d1['name'] = 'n1'
+                d2['name'] = 'n2'
+                if len(l1) < 20:
+                    d1['data'] = l1
+                    d2['data'] = l2
+                else:
+                    d1['data'] = l1[-20:]
+                    d2['data'] = l2[-20:]
+                arr.append(d1)
+                arr.append(d2)
                 return True,arr
             
         else:
