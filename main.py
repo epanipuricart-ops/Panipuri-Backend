@@ -442,7 +442,16 @@ def getCountByDate():
     else:
         return jsonify({"message": "Authorization Error"}), 403
     
-
+@app.route("/getFigures", methods=['GET','POST'])
+@cross_origin()
+def getFigures():
+    return jsonify({
+        "town": 7,
+        "masterKitchen": 1,
+        "ePanipuriKartz": 8,
+        "customer": 10,
+        "panipuriShots": 9
+        })
                 
                         
 
