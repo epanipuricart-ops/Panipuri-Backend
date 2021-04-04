@@ -26,6 +26,7 @@ def upload():
         timestamp = int(round(time.time() *1000))
         data = request.json["values"]
         uid = request.json["deviceId"]
+        print(data)
         for ele in data:
             ele["date"] = timestamp
         existing_data = mongo.db.stats.find_one({"uid": uid})['data']
@@ -362,6 +363,7 @@ def getToday():
 def getLevel():
     token = request.headers['Authorization']
     status,uid = authenticate(token)
+    print(uid)
     if status:
         available,data = sort_level(uid)
         if available:

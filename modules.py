@@ -56,7 +56,7 @@ def create_dict(t):
 def sort(uid):
     response = db.stats.find_one({"uid": uid})
     if response:
-        if response['data']:
+        if len(response['data']):
             t = db.devices.find_one({"uid": uid})["type"]
             if t == '3':
                 arr = []
@@ -102,7 +102,7 @@ def sort(uid):
                 arr.append(d3)
                 return True,arr
 
-        if t == '2':
+            if t == '2':
                 arr = []
                 d1 = {}
                 d2 = {}
@@ -144,7 +144,7 @@ def sort(uid):
 def sort_level(uid):
     response = db.levels.find_one({"uid": uid})
     if response:
-        if response['data']:
+        if len(response['data']):
             t = db.devices.find_one({"uid": uid})["type"]
             if t == '3':
                 arr = []
@@ -190,37 +190,37 @@ def sort_level(uid):
                 arr.append(d3)
                 return True,arr
 
-        elif t == '2':
-                arr = []
-                d1 = {}
-                d2 = {}
-                l1 = []
-                l2 = []
+            elif t == '2':
+                    arr = []
+                    d1 = {}
+                    d2 = {}
+                    l1 = []
+                    l2 = []
 
-                for ele in response["data"]:   
-                    if ele['name'] == 'n1':
-                        a = {}
-                        a['date'] = ele['date']
-                        a['low'] = ele['low']
-                        #a['low'] = ele['low']
-                        l1.append(a)
+                    for ele in response["data"]:   
+                        if ele['name'] == 'n1':
+                            a = {}
+                            a['date'] = ele['date']
+                            a['low'] = ele['low']
+                            #a['low'] = ele['low']
+                            l1.append(a)
+                        if ele['name'] == 'n2':
+                            a = {}
+                            a['date'] = ele['date']
+                            a['low'] = ele['low']
+                            #a['low'] = ele['low']
+                            l2.append(a)
+                    d1['name'] = 'n1'
+                    d2['name'] = 'n2'
+                    if len(l1) < 20:
+                        d1['data'] = l1
+                        d2['data'] = l2
                     else:
-                        a = {}
-                        a['date'] = ele['date']
-                        a['low'] = ele['low']
-                        #a['low'] = ele['low']
-                        l2.append(a)
-                d1['name'] = 'n1'
-                d2['name'] = 'n2'
-                if len(l1) < 20:
-                    d1['data'] = l1
-                    d2['data'] = l2
-                else:
-                    d1['data'] = l1[-20:]
-                    d2['data'] = l2[-20:]
-                arr.append(d1)
-                arr.append(d2)
-                return True,arr
+                        d1['data'] = l1[-20:]
+                        d2['data'] = l2[-20:]
+                    arr.append(d1)
+                    arr.append(d2)
+                    return True,arr
             
         else:
             arr=[]
