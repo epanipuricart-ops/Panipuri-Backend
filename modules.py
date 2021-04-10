@@ -7,6 +7,9 @@ import urllib.parse
 import urllib.request
 from urllib.error import URLError,HTTPError
 import json
+import firebase_admin
+import pyrebase
+from firebase_admin import credentials, auth
 
 client = MongoClient()
 db=client.panipuriKartz
@@ -42,6 +45,9 @@ def authenticate(tok):
         return True, uid
     else:
         return False, None 
+
+
+
 
 def create_dict(t):
     if t == '2':

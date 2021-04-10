@@ -8,7 +8,11 @@ import os
 from datetime import datetime
 import config.config as cfg
 from modules import *
-
+import firebase_admin
+import pyrebase
+from firebase_admin import credentials, auth
+import jwt
+from functools import wraps
 
 
 app = Flask(__name__, static_url_path= '')
@@ -16,6 +20,91 @@ CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 mongo = PyMongo(app)
+
+cred = credentials.Certificate('config/fbAdminSecret.json')
+firebase = firebase_admin.initialize_app(cred)
+pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
+
+def verify_token(f):
+    @wraps(f)
+    def wrap(*args,**kwargs):
+        if not request.headers.get('Authorization'):
+            return {'message': 'MissingParameters'},400
+        try:
+            user = auth.verify_id_token(request.headers['Authorization'])
+            request.user = user
+        except:
+            return {'message':'Authentication Error'},401
+        return f(*args, **kwargs)
+    return wrap
+
+@app.route('/register/<path:path>',methods=['POST'])
+@cross_origin()
+def register(path):
+    token = request.headers['Authorization']
+    if path.lower() == 'subscriber':
+        decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+        email = decoded['email']
+        firebase_id = decoded['user_id']
+        mobile = request.json['mobile']
+        name = request.jsom['name']
+        doc = {
+            "email": email,
+            "mobile": mobile,
+            "name": name,
+            "firebase_id": firebase_id,
+            "roles": ['subscriber','customer']
+        }
+        try:
+            mongo.db.clients.insert_one(doc)
+            return jsonify({"name": doc['name'], "email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
+        except:
+            return jsonify({"message": "Some error occurred"}), 500
+    elif path.lower() == 'customer':
+        decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+        email = decoded['email']
+        firebase_id = decoded['user_id']
+        mobile = request.json['mobile']
+        name = request.json['name']
+        doc = {
+            "email": email,
+            "mobile": mobile,
+            "name": name,
+            "firebase_id": firebase_id,
+            "roles": ['customer']
+        }
+        try:
+            mongo.db.clients.insert_one(doc)
+            return jsonify({"name": doc['name'], "id":doc['firebase_id'],"email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
+        except:
+            return jsonify({"message": "Some error occurred"}), 500
+
+@app.route('/login/<path:path>',methods=['POST'])
+@cross_origin()
+@verify_token
+def login(path):
+    if path.lower() == 'subscriber':
+        token = request.headers['Authorization']
+        decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+        data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
+        if data:
+            if 'subscriber' in data['roles']:
+                return jsonify({'name': data['name'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
+            else:
+                return jsonify({"message": "User Not Authorised"}), 403
+        else:
+            return jsonify({"message": "User not registered"}), 401
+    elif path.lower() == 'super':
+        token = request.headers['Authorization']
+        decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+        data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
+        if data:
+            if 'super' in data['roles']:
+                return jsonify({'name': data['name'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
+            else:
+                return jsonify({"message": "User Not Authorised"}), 403
+        else:
+            return jsonify({"message": "User not registered"}), 401
 
 
 
