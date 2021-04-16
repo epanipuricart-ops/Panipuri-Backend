@@ -91,9 +91,25 @@ def login(path):
             if 'subscriber' in data['roles']:
                 return jsonify({'name': data['name'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
             else:
-                return jsonify({"message": "User Not Authorised"}), 403
+                if 'customer' in data['roles']:
+                    mongo.db.clients.update_one({'firebase_id': decoded['user_id']},{'$push':{'roles': 'subscriber'}})
+                else:
+                    return jsonify({'message': 'Unauthorised Access'}), 403
         else:
             return jsonify({"message": "User not registered"}), 401
+
+    elif path.lower() == 'customer':
+        token = request.headers['Authorization']
+        decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+        data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
+        if data:
+            if 'customer' in data['roles']:
+                return jsonify({'name': data['name'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
+            else: 
+                return jsonify({'message': 'Unauthorised Access'}), 403
+        else:
+            return jsonify({"message": "User not registered"}), 401
+
     elif path.lower() == 'super':
         token = request.headers['Authorization']
         decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
@@ -106,7 +122,79 @@ def login(path):
         else:
             return jsonify({"message": "User not registered"}), 401
 
+@app.route('/getProfile',methods=['GET'])
+@cross_origin()
+@verify_token
+def getProfile():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+    email = decoded['email']
+    try:
+        obj = mongo.db.clients.find_one({"email": email})
+        if obj:
+            data = {}
+            for ele in obj:
+                if ele != "_id":
+                    data[ele] = obj[ele]
+            return data
+        else:
+            return jsonify({"message", "No data found"}), 404
+    except:
+        return jsonify({"message": "Some error occurred"}), 500
 
+@app.route('/saveGeneralInformation',methods=['POST'])
+@cross_origin()
+@verify_token
+def saveGeneralForm():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+    email = decoded['email']
+    obj = mongo.db.clients.find({'email': email})
+    if obj:
+        fatherName = request.json['fatherName']
+        address = request.json['address']
+        town = request.json['town']
+        pincode = request.json['pincode']
+        state = request.json['state']
+        termsAndConditions = request.json['termsAndConditions']
+        try:
+            mongo.db.gereral_forms.update_one({"email": email}, {"$set":{"fatherName": fatherName, "address": address, "town": town, "pincode": pincode,"state": state, "termsAndConditions": termsAndConditions}})
+            return jsonify({"message": "Successfully saved"})
+        except:
+            return jsonify({"message": "Some error occurred"}), 500
+    else:
+        fatherName = request.json['fatherName']
+        address = request.json['address']
+        town = request.json['town']
+        pincode = request.json['pincode']
+        state = request.json['state']
+        termsAndConditions = request.json['termsAndConditions']
+        try:
+            mongo.db.gereral_forms.insert_one({"email": email}, {"$set":{"fatherName": fatherName, "address": address, "town": town, "pincode": pincode,"state": state, "termsAndConditions": termsAndConditions}})
+            return jsonify({"message": "Successfully saved"})
+        except:
+            return jsonify({"message": "Some error occurred"}), 500
+
+@app.route('/getGeneralInformation',methods=['GET'])
+@cross_origin()
+@verify_token
+def getGeneralInformation():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+    email = decoded['email']
+    try:
+        obj = mongo.db.general_forms.find_one({"email": email})
+        if obj:
+            data = {}
+            for ele in obj:
+                if ele != "_id":
+                    data[ele] = obj[ele]
+            return data
+        else:
+            return jsonify({"message", "No saved data"}), 404
+    except:
+        return jsonify({"message": "Some error occurred"}), 500
+        
 
 @app.route('/upload', methods=['GET','POST'])
 @cross_origin()
