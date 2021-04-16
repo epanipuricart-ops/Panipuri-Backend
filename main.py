@@ -619,17 +619,29 @@ def getCountByDate():
     else:
         return jsonify({"message": "Authorization Error"}), 403
     
-@app.route("/getFigures", methods=['GET','POST'])
+@app.route("/getFigures", methods=['GET'])
 @cross_origin()
 def getFigures():
+    obj = mongo.db.company_figures.find_one({"id": 1})
+    data = {}
+    for ele in obj:
+        if ele != "_id":
+            data[ele] = obj[ele]
+    return jsonify(data)
+
+@app.route("/saveFigures", methods=['POST'])
+@cross_origin()
+@verify_token
+def saveFigures():
+    town = request.json['town']
+    masterKitchen = request.json['masterKitchen']
+    ePanipuriKartz = request.json['ePanipuriKartz']
+    customer = request.json['customer']
+    mongo.db.company_figures.update_one({'uid':1},{"$set": {"customer": customer, "ePanipuriKartz": ePanipuriKartz, "town": town, "masterKitchen": masterKitchen}})
     return jsonify({
-        "town": 7,
-        "masterKitchen": 1,
-        "ePanipuriKartz": 8,
-        "customer": 10,
-        "panipuriShots": 9
+        "message": "Success"
         })
-                
+             
                         
 
 if __name__ == "__main__":
