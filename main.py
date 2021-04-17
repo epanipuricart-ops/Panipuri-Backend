@@ -47,11 +47,13 @@ def register(path):
         email = decoded['email']
         firebase_id = decoded['user_id']
         mobile = request.json['mobile']
-        name = request.jsom['name']
+        firstName = request.json['firstName']
+        lastName = request.json['lastName']
         doc = {
             "email": email,
             "mobile": mobile,
-            "name": name,
+            "firstName": firstName,
+            "lastName": lastName,
             "firebase_id": firebase_id,
             "roles": ['subscriber','customer']
         }
@@ -64,12 +66,13 @@ def register(path):
         decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
         email = decoded['email']
         firebase_id = decoded['user_id']
-        mobile = request.json['mobile']
-        name = request.json['name']
+        firstName = request.json['firstName']
+        lastName = request.json['lastName']
         doc = {
             "email": email,
             "mobile": mobile,
-            "name": name,
+            "firstName": firstName,
+            "lastName": lastName,
             "firebase_id": firebase_id,
             "roles": ['customer']
         }
@@ -642,7 +645,10 @@ def saveFigures():
         "message": "Success"
         })
              
-                        
+@app.route("/dummy", methods=['POST'])
+@cross_origin()
+def dummy():
+    return jsonify({"message": "Success"})        
 
 if __name__ == "__main__":
     print("starting...")
