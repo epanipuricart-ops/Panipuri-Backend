@@ -13,7 +13,8 @@ import pyrebase
 from firebase_admin import credentials, auth
 import jwt
 from functools import wraps
-
+import requests
+import json
 
 app = Flask(__name__, static_url_path= '')
 CORS(app)
@@ -24,6 +25,7 @@ mongo = PyMongo(app)
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
+spring_url = "http://164.52.211.64:8080/"
 
 def verify_token(f):
     @wraps(f)
@@ -144,6 +146,72 @@ def getProfile():
             return jsonify({"message", "No data found"}), 404
     except:
         return jsonify({"message": "Some error occurred"}), 500
+
+@app.route('/sendOTP',methods=['POST'])
+@cross_origin()
+def sendOTP():
+    msg = "__OTP__ is your One Time Password for phone verification"
+    typeOfMessage = 1
+    if 'phone' in request.json:
+        phone = request.json['phone']
+        data = {"message": msg, "phone": phone, "type": typeOfMessage}
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        try:
+            response = requests.post(spring_url+'api/message/send-message', data= json.dumps(data), headers=headers)
+            json_resp = json.loads(response.text)
+            return json_resp
+        except:
+            return jsonify({"message": "Some Error Occurred"}), 500
+    else:
+        return jsonify({"message": "Missing Parameters"}), 400
+
+@app.route('/verifyOTP',methods=['POST'])
+@cross_origin()
+def verifyOTP():
+    if ('phone' in request.json) and ('token' in request.json) and ('otp' in request.json):
+        phone = request.json['phone']
+        token = request.json['token']
+        otp = request.json['otp']
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        try:
+            target_url = 'api/message/verify-otp/{}/phone/{}/otp/{}'.format(token,phone,otp)
+            response = requests.get(spring_url+ target_url, headers=headers)
+            json_resp = json.loads(response.text)
+            return json_resp
+        except:
+            return jsonify({"message": "Some Error Occurred"}), 500
+    else:
+        return jsonify({"message": "Missing Parameters"}), 400  
+
+
+@app.route('/resendOTP',methods=['POST'])
+@cross_origin()
+def reSendOTP():
+    msg = "__OTP__ is your One Time Password for phone verification"
+    typeOfMessage = 3
+    if 'phone' in request.json:
+        phone = request.json['phone']
+        token = request.json['token']
+        data = {"message": msg, "phone": phone, "type": typeOfMessage}
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        try:
+            response = requests.post(spring_url+'api/message/send-message?token={}'.format(token), data= json.dumps(data), headers=headers)
+            json_resp = json.loads(response.text)
+            return json_resp
+        except:
+            return jsonify({"message": "Some Error Occurred"}), 500
+    else:
+        return jsonify({"message": "Missing Parameters"}), 400
+
 
 @app.route('/saveGeneralInformation',methods=['POST'])
 @cross_origin()
@@ -644,11 +712,7 @@ def saveFigures():
     return jsonify({
         "message": "Success"
         })
-             
-@app.route("/dummy", methods=['POST'])
-@cross_origin()
-def dummy():
-    return jsonify({"message": "Success"})        
+                  
 
 if __name__ == "__main__":
     print("starting...")
