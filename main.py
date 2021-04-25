@@ -61,9 +61,10 @@ def register(path):
         }
         try:
             mongo.db.clients.insert_one(doc)
-            return jsonify({"name": doc['name'], "email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
+            return jsonify({"firstName": doc['firstName'],"lastName":doc['lastName'], "email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
         except:
             return jsonify({"message": "Some error occurred"}), 500
+            
     elif path.lower() == 'customer':
         decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
         email = decoded['email']
@@ -80,7 +81,7 @@ def register(path):
         }
         try:
             mongo.db.clients.insert_one(doc)
-            return jsonify({"name": doc['name'], "id":doc['firebase_id'],"email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
+            return jsonify({"firstName": doc['firstName'],"lastName":doc['lastName'], "email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
         except:
             return jsonify({"message": "Some error occurred"}), 500
 
@@ -94,7 +95,7 @@ def login(path):
         data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
         if data:
             if 'subscriber' in data['roles']:
-                return jsonify({'name': data['name'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
+                return jsonify({'firstName': data['firstName'],'lastName': data['lastName'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
             else:
                 if 'customer' in data['roles']:
                     mongo.db.clients.update_one({'firebase_id': decoded['user_id']},{'$push':{'roles': 'subscriber'}})
@@ -109,7 +110,7 @@ def login(path):
         data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
         if data:
             if 'customer' in data['roles']:
-                return jsonify({'name': data['name'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
+                return jsonify({'firstName': data['firstName'],'lastName': data['lastName'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
             else: 
                 return jsonify({'message': 'Unauthorised Access'}), 403
         else:
@@ -159,12 +160,16 @@ def sendOTP():
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        try:
-            response = requests.post(spring_url+'api/message/send-message', data= json.dumps(data), headers=headers)
-            json_resp = json.loads(response.text)
-            return json_resp
-        except:
-            return jsonify({"message": "Some Error Occurred"}), 500
+        num = mongo.db.clients.find_one({"mobile": phone})
+        if False:
+            return jsonify({"message": "Mobile number already registered"}), 423
+        else:
+            try:
+                response = requests.post(spring_url+'api/message/send-message', data= json.dumps(data), headers=headers)
+                json_resp = json.loads(response.text)
+                return json_resp
+            except:
+                return jsonify({"message": "Some Error Occurred"}), 500
     else:
         return jsonify({"message": "Missing Parameters"}), 400
 
@@ -265,6 +270,17 @@ def getGeneralInformation():
             return jsonify({"message", "No saved data"}), 404
     except:
         return jsonify({"message": "Some error occurred"}), 500
+
+@app.route('/getCosting',methods=['GET'])
+@cross_origin()
+@verify_token
+def getCosting():
+    return jsonify({"items":[
+        {"name": "3 nozzle system", "dateModified": 1619326497315, "price": 29000, "uid": 1},
+        {"name": "6 nozzle system", "dateModified": 1619326497315, "price": 45000, "uid": 2},
+        {"name": "9 nozzle system", "dateModified": 1619326497315, "price": 71000, "uid": 3}
+    ]})
+
         
 
 @app.route('/upload', methods=['GET','POST'])
