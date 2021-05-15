@@ -5,6 +5,7 @@ from flask import jsonify
 from flask_cors import CORS , cross_origin
 import time
 import os
+from werkzeug.utils import secure_filename
 from datetime import datetime
 import config.config as cfg
 from modules import *
@@ -15,22 +16,29 @@ import jwt
 from functools import wraps
 import requests
 import json
+import random
+
+UPLOAD_FOLDER = 'public/img'
+#INTERMEDIATE_FOLDER = 'intermediate'
+ALLOWED_EXTENSIONS = { 'png', 'jpg', 'jpeg'}
 
 app = Flask(__name__, static_url_path= '')
 CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
 
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
-spring_url = "http://164.52.211.64:8080/"
-
+spring_url = "http://15.207.147.88:8080/"
+agreement_url = "http://15.207.147.88:8081/"
 def verify_token(f):
     @wraps(f)
     def wrap(*args,**kwargs):
         if not request.headers.get('Authorization'):
+            print(request.headers)
             return {'message': 'MissingParameters'},400
         try:
             user = auth.verify_id_token(request.headers['Authorization'])
@@ -39,6 +47,9 @@ def verify_token(f):
             return {'message':'Authentication Error'},401
         return f(*args, **kwargs)
     return wrap
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/register/<path:path>',methods=['POST'])
 @cross_origin()
@@ -49,11 +60,13 @@ def register(path):
         email = decoded['email']
         firebase_id = decoded['user_id']
         mobile = request.json['mobile']
+        title = request.json['title']
         firstName = request.json['firstName']
         lastName = request.json['lastName']
         doc = {
             "email": email,
             "mobile": mobile,
+            "title": title,
             "firstName": firstName,
             "lastName": lastName,
             "firebase_id": firebase_id,
@@ -61,7 +74,7 @@ def register(path):
         }
         try:
             mongo.db.clients.insert_one(doc)
-            return jsonify({"firstName": doc['firstName'],"lastName":doc['lastName'], "email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
+            return jsonify({"title":doc['title'],"firstName": doc['firstName'],"lastName":doc['lastName'], "email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
         except:
             return jsonify({"message": "Some error occurred"}), 500
             
@@ -71,17 +84,20 @@ def register(path):
         firebase_id = decoded['user_id']
         firstName = request.json['firstName']
         lastName = request.json['lastName']
+        mobile = request.json['mobile']
+        title = request.json['title']
         doc = {
             "email": email,
             "mobile": mobile,
             "firstName": firstName,
+            "title": title,
             "lastName": lastName,
             "firebase_id": firebase_id,
             "roles": ['customer']
         }
         try:
             mongo.db.clients.insert_one(doc)
-            return jsonify({"firstName": doc['firstName'],"lastName":doc['lastName'], "email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
+            return jsonify({"title":doc['title'],"firstName": doc['firstName'],"lastName":doc['lastName'], "email": doc['email'], "mobile": doc['mobile'], "roles": doc['roles']})
         except:
             return jsonify({"message": "Some error occurred"}), 500
 
@@ -95,7 +111,7 @@ def login(path):
         data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
         if data:
             if 'subscriber' in data['roles']:
-                return jsonify({'firstName': data['firstName'],'lastName': data['lastName'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
+                return jsonify({"title":data['title'],'firstName': data['firstName'],'lastName': data['lastName'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
             else:
                 if 'customer' in data['roles']:
                     mongo.db.clients.update_one({'firebase_id': decoded['user_id']},{'$push':{'roles': 'subscriber'}})
@@ -110,7 +126,7 @@ def login(path):
         data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
         if data:
             if 'customer' in data['roles']:
-                return jsonify({'firstName': data['firstName'],'lastName': data['lastName'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
+                return jsonify({"title":data['title'],'firstName': data['firstName'],'lastName': data['lastName'], 'email': data['email'], 'id': data['firebase_id'],'mobile': data['mobile'],'roles': data['roles']})
             else: 
                 return jsonify({'message': 'Unauthorised Access'}), 403
         else:
@@ -225,8 +241,13 @@ def saveGeneralForm():
     token = request.headers['Authorization']
     decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
     email = decoded['email']
-    obj = mongo.db.clients.find({'email': email})
+    obj = mongo.db.general_forms.find_one({'email': email})
     if obj:
+        title = request.json['title']
+        firstName = request.json['firstName']
+        lastName = request.json['lastName']
+        mobile = request.json['mobile']
+        aadhar = request.json['aadhar']
         fatherName = request.json['fatherName']
         address = request.json['address']
         town = request.json['town']
@@ -234,11 +255,16 @@ def saveGeneralForm():
         state = request.json['state']
         termsAndConditions = request.json['termsAndConditions']
         try:
-            mongo.db.gereral_forms.update_one({"email": email}, {"$set":{"fatherName": fatherName, "address": address, "town": town, "pincode": pincode,"state": state, "termsAndConditions": termsAndConditions}})
+            mongo.db.general_forms.update_one({"email": email}, {"$set":{"title": title,"firstName": firstName, "lastName": lastName, "mobile": mobile, "aadhar": aadhar, "fatherName": fatherName, "address": address, "town": town, "pincode": pincode,"state": state, "termsAndConditions": termsAndConditions}})
             return jsonify({"message": "Successfully saved"})
         except:
             return jsonify({"message": "Some error occurred"}), 500
     else:
+        title = request.json['title']
+        firstName = request.json['firstName']
+        lastName = request.json['lastName']
+        mobile = request.json['mobile']
+        aadhar = request.json['aadhar']
         fatherName = request.json['fatherName']
         address = request.json['address']
         town = request.json['town']
@@ -246,7 +272,7 @@ def saveGeneralForm():
         state = request.json['state']
         termsAndConditions = request.json['termsAndConditions']
         try:
-            mongo.db.gereral_forms.insert_one({"email": email}, {"$set":{"fatherName": fatherName, "address": address, "town": town, "pincode": pincode,"state": state, "termsAndConditions": termsAndConditions}})
+            mongo.db.general_forms.insert_one({"title": title,"firstName": firstName, "lastName": lastName, "mobile": mobile, "aadhar": aadhar, "email": email, "fatherName": fatherName, "address": address, "town": town, "pincode": pincode,"state": state, "termsAndConditions": termsAndConditions})
             return jsonify({"message": "Successfully saved"})
         except:
             return jsonify({"message": "Some error occurred"}), 500
@@ -275,13 +301,170 @@ def getGeneralInformation():
 @cross_origin()
 @verify_token
 def getCosting():
-    return jsonify({"items":[
-        {"name": "3 nozzle system", "dateModified": 1619326497315, "price": 29000, "uid": 1},
-        {"name": "6 nozzle system", "dateModified": 1619326497315, "price": 45000, "uid": 2},
-        {"name": "9 nozzle system", "dateModified": 1619326497315, "price": 71000, "uid": 3}
-    ]})
+    try:
+        data = mongo.db.costing.find()
+        arr = []
+        for ele in data:
+            d = {}
+            d['name'] = ele['name']
+            d['dateModified'] = ele['dateModified']
+            d['price'] = ele['price']
+            d['uid'] = ele['uid']
+            d['modelType'] = ele['modelType']
+            arr.append(d)        
+        return jsonify({"items": arr})
+            
+    except:
+        return jsonify({"message": "Some Error Occurred"}), 500
 
-        
+@app.route('/updateCosting',methods=['POSt'])
+@cross_origin()
+@verify_token
+def updateCosting():
+    uid = request.json['uid']
+    price = float(request.json['price'])
+    try:
+        data = mongo.db.costing.find_one({"uid": uid})      
+        mongo.db.costing.update_one({"uid": uid},{"$set": {"price": price, "dateModified": int(round(time.time() *1000))}})
+        post = {}
+        for ele in data:
+            if ele != "_id":
+                post[ele] = data[ele]
+        mongo.db.costing_history.insert_one(post)     
+        return jsonify({"message": "Success"})             
+    except:
+        return jsonify({"message": "Some Error Occurred"}), 500
+
+
+@app.route('/paymentSuccess',methods=['POSt'])
+@cross_origin()
+@verify_token
+def paymentSuccess():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+    email = decoded['email']
+    transaction_id = request.json['transactionId']
+    model_uid = request.json['uid']
+    date = int(round(time.time() *1000))
+ 
+    try:
+        original_amount = mongo.db.costing.find_one({"uid": model_uid})['price']
+        amount = 0.5 * float(original_amount)
+        mongo.db.clients.update_one({"email": email},{"$addToSet": {"roles": "paid_subscriber"}})
+        mongo.db.transaction_history.insert_one({"email": email, "amount": amount, "transaction_id": transaction_id, "date": date})
+        order_id = mongo.db.order_num.find_one({"id": 1})['order_id']
+        mongo.db.orders.insert_one({"email": email, "order_id": "EK-"+ str(order_id), "model_uid": model_uid , "date": date, "status": "pending"})
+        mongo.db.device_ids.insert_one({"email":email, "device_id": "epanipuricart.dummy.1"})
+        mongo.db.order_num.update_one({"id": 1}, {"$set": {"order_id": order_id+1}})     
+        return jsonify({"message": "Success", "order_id": "EK-"+str(order_id)})             
+    except:
+        return jsonify({"message": "Some Error Occurred"}), 500
+
+
+@app.route('/getLatestOrder',methods=['GET'])
+@cross_origin()
+@verify_token
+def getLatestOrder():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+    email = decoded['email']
+    try:
+        data = mongo.db.orders.find({"email": email}).sort("date",-1)
+        d = {}
+        for x in data[0]:
+            if x != "_id":
+                d[x] = data[0][x]
+        return d
+    except:
+        return jsonify({"message": "Some error occurred"}), 500
+
+@app.route('/getAllOrders',methods=['GET'])
+@cross_origin()
+@verify_token
+def getAllOrders():
+    try:
+        data = mongo.db.orders.find().sort("date",-1)
+        all_orders = []
+        for items in data:
+            d = {}
+            for keys in items:
+                if keys != "_id":
+                    d[keys] = items[keys]
+            all_orders.append(d) 
+
+        return jsonify({"orders": all_orders})
+    except:
+        return jsonify({"message": "Some error occurred"}), 500
+
+
+@app.route('/uploadDocuments',methods=['POSt'])
+@cross_origin()
+@verify_token
+def uploadDocuments():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+    email = decoded['email']
+    user_id = decoded['user_id']
+    order_id = request.form['order_id']
+    if 'files[]' not in request.files:
+        return jsonify({"Missing files"}), 400
+    else:
+        data = mongo.db.docs.find_one({"email": email})
+        if data == None:
+            mongo.db.docs.insert_one({"email": email, "sign": "", "aadhar": "", "photo": ""})
+        files = request.files.getlist('files[]')
+        for file in files:
+            if file and allowed_file(file.filename):
+                for ele in request.form:
+                    print(ele)
+                    if file.filename.lower() == request.form[ele].lower():
+                        filename_temp = secure_filename(file.filename)
+                        extension = filename_temp.split('.')[-1] 
+                        timestamp = int(round(time.time() *1000))
+                        hex_form = str(hex(timestamp*random.randint(1,5)))[2:]
+                        enc_filename = str(ele) + "_" + hex_form + str(user_id[-4:]) + "."+ extension                        
+                        try:
+                            mongo.db.docs.update_one({"email": email},{"$set": {str(ele): enc_filename}})
+                            file.save(os.path.join(app.config['UPLOAD_FOLDER'], enc_filename))
+
+                        except:
+                            return jsonify({"message": "Some Error Occurred"}), 500
+
+        user_data = mongo.db.general_forms.find_one({"email": email})
+        docs_data = mongo.db.docs.find_one({"email": email})
+        #base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
+        name = user_data['title']+user_data['firstName']+ " "+user_data['lastName']
+        aadhar = user_data['aadhar']
+        brand= "E-Panipurii Kartz"
+        customer_id="epanipuricart.dummy.1"
+        model="Table Top"
+        model_extension= "3-nozzle system"
+        fName= user_data['fatherName']
+        address= user_data['address'] + ',' + user_data['state'] + ',' + user_data['town'] + ',' + str(user_data['pincode'])
+        mobile=user_data['mobile']
+        amount = "6000"
+        aadharLogoPath=  os.path.join(app.config['UPLOAD_FOLDER'],docs_data['aadhar'])
+        ap = str(os.path.abspath(aadharLogoPath))
+        customerPhotoPath =  os.path.join(app.config['UPLOAD_FOLDER'],docs_data['photo'])
+        cp = str(os.path.abspath(customerPhotoPath))
+        customerSignaturePath =  os.path.join(app.config['UPLOAD_FOLDER'],docs_data['sign'])
+        cs = str(os.path.abspath(customerSignaturePath))
+        post = {"name": name, "email": email, "aadhar": aadhar, "address": address, "brand": brand, "customerId": customer_id, "model": model, "extension": model_extension, 
+        "fname": fName, "mobile": mobile, "amount": amount, "aadharLogoPath": ap, 
+        "customerPhotoPath": cp, "customerSignaturePath": cs}
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        print(post)     
+        try:
+            response = requests.post(agreement_url+'generate-agreement', data= json.dumps(post), headers=headers)
+            print(response.text)
+            mongo.db.clients.update_one({"email": email},{"$addToSet": {"roles": "franchisee"}})
+            return jsonify({"output": str(response.text)})
+        except:
+            return jsonify({"message": "Service Error"}), 423
+
 
 @app.route('/upload', methods=['GET','POST'])
 @cross_origin()
@@ -724,7 +907,7 @@ def saveFigures():
     masterKitchen = request.json['masterKitchen']
     ePanipuriKartz = request.json['ePanipuriKartz']
     customer = request.json['customer']
-    mongo.db.company_figures.update_one({'uid':1},{"$set": {"customer": customer, "ePanipuriKartz": ePanipuriKartz, "town": town, "masterKitchen": masterKitchen}})
+    mongo.db.company_figures.update_one({'id':1},{"$set": {"customer": customer, "ePanipuriKartz": ePanipuriKartz, "town": town, "masterKitchen": masterKitchen}})
     return jsonify({
         "message": "Success"
         })
