@@ -925,7 +925,21 @@ def saveFigures():
     return jsonify({
         "message": "Success"
         })
-                  
+
+
+@app.route('/updateOrder', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateOrder():
+    order_id = request.json['order_id']
+    status = request.json['status']
+    try:
+        data = mongo.db.order.find_one({"order_id": order_id}, {"_id": 0})
+        mongo.db.order_id.update_one({"order_id": order_id}, {"$set": {"status": status, "date": int(round(time.time() * 1000))}})
+        mongo.db.costing_history.insert_one(data)
+        return jsonify({"message": "Success"})
+    except:
+        return jsonify({"message": "Some Error Occurred"}), 500
 
 if __name__ == "__main__":
     print("starting...")
