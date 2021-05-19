@@ -1,4 +1,4 @@
-from flask import Flask,session,send_from_directory
+from flask import Flask,session,send_from_directory, send_file
 from flask import request,redirect,url_for
 from flask_pymongo import PyMongo
 from flask import jsonify
@@ -34,6 +34,7 @@ firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
 spring_url = "http://15.207.147.88:8080/"
 agreement_url = "http://15.207.147.88:8081/"
+
 def verify_token(f):
     @wraps(f)
     def wrap(*args,**kwargs):
@@ -247,7 +248,7 @@ def saveGeneralForm():
         firstName = request.json['firstName']
         lastName = request.json['lastName']
         mobile = request.json['mobile']
-        aadhar = request.json['aadhar']
+        aadhar = str(request.json['aadhar'])
         fatherName = request.json['fatherName']
         address = request.json['address']
         town = request.json['town']
@@ -264,7 +265,7 @@ def saveGeneralForm():
         firstName = request.json['firstName']
         lastName = request.json['lastName']
         mobile = request.json['mobile']
-        aadhar = request.json['aadhar']
+        aadhar = str(request.json['aadhar'])
         fatherName = request.json['fatherName']
         address = request.json['address']
         town = request.json['town']
@@ -355,6 +356,7 @@ def paymentSuccess():
         order_id = mongo.db.order_num.find_one({"id": 1})['order_id']
         mongo.db.orders.insert_one({"email": email, "order_id": "EK-"+ str(order_id), "model_uid": model_uid , "date": date, "status": "pending"})
         mongo.db.device_ids.insert_one({"email":email, "device_id": "epanipuricart.dummy.1"})
+        mongo.db.order_history.insert_one({"order_id": order_id, "status": "pending", "date": date})
         mongo.db.order_num.update_one({"id": 1}, {"$set": {"order_id": order_id+1}})     
         return jsonify({"message": "Success", "order_id": "EK-"+str(order_id)})             
     except:
@@ -409,9 +411,9 @@ def uploadDocuments():
     if 'files[]' not in request.files:
         return jsonify({"Missing files"}), 400
     else:
-        data = mongo.db.docs.find_one({"email": email})
+        data = mongo.db.docs.find_one({"order_id": order_id})
         if data == None:
-            mongo.db.docs.insert_one({"email": email, "sign": "", "aadhar": "", "photo": ""})
+            mongo.db.docs.insert_one({"email": email, "sign": "", "aadhar": "", "photo": "", "order_id": order_id, "pdf": ""})
         files = request.files.getlist('files[]')
         for file in files:
             if file and allowed_file(file.filename):
@@ -424,7 +426,7 @@ def uploadDocuments():
                         hex_form = str(hex(timestamp*random.randint(1,5)))[2:]
                         enc_filename = str(ele) + "_" + hex_form + str(user_id[-4:]) + "."+ extension                        
                         try:
-                            mongo.db.docs.update_one({"email": email},{"$set": {str(ele): enc_filename}})
+                            mongo.db.docs.update_one({"order_id": order_id},{"$set": {str(ele): enc_filename}})
                             file.save(os.path.join(app.config['UPLOAD_FOLDER'], enc_filename))
 
                         except:
@@ -461,10 +463,22 @@ def uploadDocuments():
             response = requests.post(agreement_url+'generate-agreement', data= json.dumps(post), headers=headers)
             print(response.text)
             mongo.db.clients.update_one({"email": email},{"$addToSet": {"roles": "franchisee"}})
+            mongo.db.orders.update_one({"order_id": order_id},{"$set":{"status": "placed"}})
+            mongo.db.order_history.insert_one({"order_id": order_id, "status": "placed", "date": int(round(time.time() *1000))})
+            mongo.db.docs.update_one({"order_id": order_id}, {"$set": {"pdf": str(response.text)}})
             return jsonify({"output": str(response.text)})
         except:
             return jsonify({"message": "Service Error"}), 423
 
+@app.route('/getMOU', methods=['GET','POST'])
+@cross_origin()
+@verify_token
+def getMOU():
+    path = request.args.get('path')
+    try:
+        return send_file(path,as_attachment=True)
+    except:
+        return jsonify({"message": "Some Error Occurred"}), 500
 
 @app.route('/upload', methods=['GET','POST'])
 @cross_origin()
