@@ -934,9 +934,8 @@ def updateOrder():
     order_id = request.json['order_id']
     status = request.json['status']
     try:
-        data = mongo.db.orders.find_one({"order_id": order_id}, {"_id": 0})
         mongo.db.orders.update_one({"order_id": order_id}, {"$set": {"status": status, "date": int(round(time.time() * 1000))}})
-        mongo.db.order_history.insert_one(data)
+        mongo.db.order_history.insert_one({"order_id": order_id , "status": status, "date": int(round(time.time() * 1000))})
         return jsonify({"message": "Success"})
     except:
         return jsonify({"message": "Some Error Occurred"}), 500
