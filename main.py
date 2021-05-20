@@ -34,6 +34,7 @@ firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
 spring_url = "http://15.207.147.88:8080/"
 agreement_url = "http://15.207.147.88:8081/"
+mailer_url = "http://15.207.147.88:8082/"
 
 def verify_token(f):
     @wraps(f)
@@ -466,6 +467,23 @@ def uploadDocuments():
             mongo.db.orders.update_one({"order_id": order_id},{"$set":{"status": "placed"}})
             mongo.db.order_history.insert_one({"order_id": order_id, "status": "placed", "date": int(round(time.time() *1000))})
             mongo.db.docs.update_one({"order_id": order_id}, {"$set": {"pdf": str(response.text)}})
+            payload = {
+                        "attachmentPaths": [
+                            "string"
+                        ],
+                        "bccAddresses": [
+                            "string"
+                        ],
+                        "ccAddresses": [
+                            "string"
+                        ],
+                        "mailBody": "string",
+                        "mailSubject": "string",
+                        "toAddresses": [
+                            "string"
+                        ]
+                    }
+            requests.post(mailer_url+'send-mail',json=)
             return jsonify({"output": str(response.text)})
         except:
             return jsonify({"message": "Service Error"}), 423
