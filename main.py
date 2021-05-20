@@ -348,7 +348,7 @@ def paymentSuccess():
     transaction_id = request.json['transactionId']
     model_uid = request.json['uid']
     date = int(round(time.time() *1000))
- 
+
     try:
         original_amount = mongo.db.costing.find_one({"uid": model_uid})['price']
         amount = 0.5 * float(original_amount)
@@ -358,8 +358,19 @@ def paymentSuccess():
         mongo.db.orders.insert_one({"email": email, "order_id": "EK-"+ str(order_id), "model_uid": model_uid , "date": date, "status": "pending"})
         mongo.db.device_ids.insert_one({"email":email, "device_id": "epanipuricart.dummy.1"})
         mongo.db.order_history.insert_one({"order_id": order_id, "status": "pending", "date": date})
-        mongo.db.order_num.update_one({"id": 1}, {"$set": {"order_id": order_id+1}})     
-        return jsonify({"message": "Success", "order_id": "EK-"+str(order_id)})             
+        mongo.db.order_num.update_one({"id": 1}, {"$set": {"order_id": order_id+1}})
+        payload = {
+                    "attachmentPaths": [],
+                    "bccAddresses": [],
+                    "ccAddresses": [],
+                    "mailBody": "Your payment is confirmed.",
+                    "mailSubject": "Payment Confirmation",
+                    "toAddresses": [
+                        "jyotimay16@gmail.com"
+                    ]
+                }
+        requests.post(mailer_url+'send-mail', json=payload)
+        return jsonify({"message": "Success", "order_id": "EK-"+str(order_id)})
     except:
         return jsonify({"message": "Some Error Occurred"}), 500
 
@@ -469,21 +480,17 @@ def uploadDocuments():
             mongo.db.docs.update_one({"order_id": order_id}, {"$set": {"pdf": str(response.text)}})
             payload = {
                         "attachmentPaths": [
-                            "string"
+                            response.text
                         ],
-                        "bccAddresses": [
-                            "string"
-                        ],
-                        "ccAddresses": [
-                            "string"
-                        ],
-                        "mailBody": "string",
-                        "mailSubject": "string",
+                        "bccAddresses": [],
+                        "ccAddresses": [],
+                        "mailBody": "Test Agreement Mail",
+                        "mailSubject": "Agreement Mail",
                         "toAddresses": [
-                            "string"
+                            "jyotimay16@gmail.com"
                         ]
                     }
-            requests.post(mailer_url+'send-mail',json=)
+            requests.post(mailer_url+'send-mail',json=payload)
             return jsonify({"output": str(response.text)})
         except:
             return jsonify({"message": "Service Error"}), 423
