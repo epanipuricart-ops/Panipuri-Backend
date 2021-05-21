@@ -243,35 +243,64 @@ def saveGeneralForm():
     decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
     email = decoded['email']
     obj = mongo.db.general_forms.find_one({'email': email})
-    if obj:
-        title = request.json['title']
-        firstName = request.json['firstName']
-        lastName = request.json['lastName']
-        mobile = request.json['mobile']
+    if 'title' in request.json:
+        title = str(request.json['title'])
+    else:
+        title = ''
+    if 'firstName' in request.json:
+        firstName = str(request.json['firstName'])
+    else:
+        firstName = ''
+    if 'lastName' in request.json:
+        lastName = str(request.json['lastName'])
+    else:
+        lastName = ''
+    if 'mobile' in request.json:
+        mobile = str(request.json['mobile'])
+    else:
+        mobile = ''
+    if 'aadhar' in request.json:
         aadhar = str(request.json['aadhar'])
-        fatherName = request.json['fatherName']
-        address = request.json['address']
-        town = request.json['town']
-        pincode = request.json['pincode']
-        state = request.json['state']
-        termsAndConditions = request.json['termsAndConditions']
+    else:
+        aadhar = ''
+
+    if 'fatherName' in request.json:
+        fatherName = str(request.json['fatherName'])
+    else:
+        fatherName = '' 
+
+    if 'address' in request.json:
+        address = str(request.json['address'])
+    else:
+        address = ''
+
+    if 'town' in request.json:
+        town = str(request.json['town'])
+    else:
+        town = ''
+
+    if 'pincode' in request.json:
+        pincode = str(request.json['pincode'])
+    else:
+        pincode = ''   
+    
+    if 'state' in request.json:
+        state = str(request.json['state'])
+    else:
+        state = ''
+    
+    if 'termsAndConditions' in request.json:
+        termsAndConditions= str(request.json['termsAndConditions'])
+    else:
+        termsAndConditions = ''
+
+    if obj:
         try:
             mongo.db.general_forms.update_one({"email": email}, {"$set":{"title": title,"firstName": firstName, "lastName": lastName, "mobile": mobile, "aadhar": aadhar, "fatherName": fatherName, "address": address, "town": town, "pincode": pincode,"state": state, "termsAndConditions": termsAndConditions}})
             return jsonify({"message": "Successfully saved"})
         except:
             return jsonify({"message": "Some error occurred"}), 500
     else:
-        title = request.json['title']
-        firstName = request.json['firstName']
-        lastName = request.json['lastName']
-        mobile = request.json['mobile']
-        aadhar = str(request.json['aadhar'])
-        fatherName = request.json['fatherName']
-        address = request.json['address']
-        town = request.json['town']
-        pincode = request.json['pincode']
-        state = request.json['state']
-        termsAndConditions = request.json['termsAndConditions']
         try:
             mongo.db.general_forms.insert_one({"title": title,"firstName": firstName, "lastName": lastName, "mobile": mobile, "aadhar": aadhar, "email": email, "fatherName": fatherName, "address": address, "town": town, "pincode": pincode,"state": state, "termsAndConditions": termsAndConditions})
             return jsonify({"message": "Successfully saved"})
@@ -409,7 +438,7 @@ def uploadDocuments():
     user_id = decoded['user_id']
     order_id = request.form['order_id']
     if 'files[]' not in request.files:
-        return jsonify({"Missing files"}), 400
+        return jsonify({"message": "Missing files"}), 400
     else:
         data = mongo.db.docs.find_one({"order_id": order_id})
         if data == None:
@@ -466,6 +495,7 @@ def uploadDocuments():
             mongo.db.orders.update_one({"order_id": order_id},{"$set":{"status": "placed"}})
             mongo.db.order_history.insert_one({"order_id": order_id, "status": "placed", "date": int(round(time.time() *1000))})
             mongo.db.docs.update_one({"order_id": order_id}, {"$set": {"pdf": str(response.text)}})
+            
             return jsonify({"output": str(response.text)})
         except:
             return jsonify({"message": "Service Error"}), 423
