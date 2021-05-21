@@ -34,6 +34,7 @@ firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
 spring_url = "http://15.207.147.88:8080/"
 agreement_url = "http://15.207.147.88:8081/"
+mailer_url = "http://15.207.147.88:8082/"
 
 def verify_token(f):
     @wraps(f)
@@ -347,7 +348,7 @@ def paymentSuccess():
     transaction_id = request.json['transactionId']
     model_uid = request.json['uid']
     date = int(round(time.time() *1000))
- 
+
     try:
         original_amount = mongo.db.costing.find_one({"uid": model_uid})['price']
         amount = 0.5 * float(original_amount)
@@ -357,8 +358,19 @@ def paymentSuccess():
         mongo.db.orders.insert_one({"email": email, "order_id": "EK-"+ str(order_id), "model_uid": model_uid , "date": date, "status": "pending"})
         mongo.db.device_ids.insert_one({"email":email, "device_id": "epanipuricart.dummy.1"})
         mongo.db.order_history.insert_one({"order_id": order_id, "status": "pending", "date": date})
-        mongo.db.order_num.update_one({"id": 1}, {"$set": {"order_id": order_id+1}})     
-        return jsonify({"message": "Success", "order_id": "EK-"+str(order_id)})             
+        mongo.db.order_num.update_one({"id": 1}, {"$set": {"order_id": order_id+1}})
+        payload = {
+                    "attachmentPaths": [],
+                    "bccAddresses": [],
+                    "ccAddresses": [],
+                    "mailBody": "Your payment is confirmed.",
+                    "mailSubject": "Payment Confirmation",
+                    "toAddresses": [
+                        "jyotimay16@gmail.com"
+                    ]
+                }
+        requests.post(mailer_url+'send-mail', json=payload)
+        return jsonify({"message": "Success", "order_id": "EK-"+str(order_id)})
     except:
         return jsonify({"message": "Some Error Occurred"}), 500
 
@@ -466,6 +478,19 @@ def uploadDocuments():
             mongo.db.orders.update_one({"order_id": order_id},{"$set":{"status": "placed"}})
             mongo.db.order_history.insert_one({"order_id": order_id, "status": "placed", "date": int(round(time.time() *1000))})
             mongo.db.docs.update_one({"order_id": order_id}, {"$set": {"pdf": str(response.text)}})
+            payload = {
+                        "attachmentPaths": [
+                            response.text
+                        ],
+                        "bccAddresses": [],
+                        "ccAddresses": [],
+                        "mailBody": "Test Agreement Mail",
+                        "mailSubject": "Agreement Mail",
+                        "toAddresses": [
+                            "jyotimay16@gmail.com"
+                        ]
+                    }
+            requests.post(mailer_url+'send-mail',json=payload)
             return jsonify({"output": str(response.text)})
         except:
             return jsonify({"message": "Service Error"}), 423
@@ -925,7 +950,20 @@ def saveFigures():
     return jsonify({
         "message": "Success"
         })
-                  
+
+
+@app.route('/updateOrder', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateOrder():
+    order_id = request.json['order_id']
+    status = request.json['status']
+    try:
+        mongo.db.orders.update_one({"order_id": order_id}, {"$set": {"status": status, "date": int(round(time.time() * 1000))}})
+        mongo.db.order_history.insert_one({"order_id": order_id , "status": status, "date": int(round(time.time() * 1000))})
+        return jsonify({"message": "Success"})
+    except:
+        return jsonify({"message": "Some Error Occurred"}), 500
 
 if __name__ == "__main__":
     print("starting...")
