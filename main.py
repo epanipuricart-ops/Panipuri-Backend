@@ -430,6 +430,10 @@ def getAllOrders():
         all_orders = []
         for items in data:
             d = {}
+            email = mongo.db.docs.find_one({"order_id": items['order_id']})['email']
+            name = mongo.db.clients.find_one({"email"})['name']
+            d['email'] = email
+            d['name'] = name
             for keys in items:
                 if keys != "_id":
                     d[keys] = items[keys]
@@ -516,7 +520,7 @@ def uploadDocuments():
                         "mailBody": "Test Agreement Mail",
                         "mailSubject": "Agreement Mail",
                         "toAddresses": [
-                            "jyotimay16@gmail.com"
+                            email, "ceo@epanipuricart.com", "jyotimay16@gmail.com"
                         ]
                     }
             requests.post(mailer_url+'send-mail',json=payload)
