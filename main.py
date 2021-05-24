@@ -1,4 +1,4 @@
-from flask import Flask,session,send_from_directory, send_file
+from flask import Flask,session,send_from_directory, send_file, render_template
 from flask import request,redirect,url_for
 from flask_pymongo import PyMongo
 from flask import jsonify
@@ -32,9 +32,11 @@ mongo = PyMongo(app)
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
+global_key = "ueQ4sZ"
 spring_url = "http://15.207.147.88:8080/"
 agreement_url = "http://15.207.147.88:8081/"
 mailer_url = "http://15.207.147.88:8082/"
+payment_url = "http://15.207.147.88:8083/"
 
 def verify_token(f):
     @wraps(f)
@@ -342,13 +344,14 @@ def getCosting():
             d['price'] = ele['price']
             d['uid'] = ele['uid']
             d['modelType'] = ele['modelType']
+            d['extension'] = ele['extension']
             arr.append(d)        
         return jsonify({"items": arr})
             
     except:
         return jsonify({"message": "Some Error Occurred"}), 500
 
-@app.route('/updateCosting',methods=['POSt'])
+@app.route('/updateCosting',methods=['POST'])
 @cross_origin()
 @verify_token
 def updateCosting():
@@ -366,11 +369,69 @@ def updateCosting():
     except:
         return jsonify({"message": "Some Error Occurred"}), 500
 
-
-@app.route('/paymentSuccess',methods=['POSt'])
+@app.route('/payNow',methods=['POST'])
 @cross_origin()
 @verify_token
-def paymentSuccess():
+def payNow():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+    model_uid = request.json['uid']
+    model_data = mongo.db.costing.find_one({"uid": model_uid})
+    email = decoded['email']
+    client_data = mongo.db.clients.find_one({"email": email})
+    firstName = client_data['firstName']
+    phone = client_data['mobile']
+
+    post = {
+        "key": global_key,
+        "amount": str(model_data['price']),
+        "phone": phone,
+        "productinfo": (model_data['name'] + " "+ model_data['extension']).rstrip(),
+        "surl": "http://15.207.147.88:5000/payuSuccess",
+        "furl": "http://15.207.147.88:5000/payuFailure",
+        "firstname": firstName,
+        "email": email,
+        "service_provider": "payu_paisa"
+    }
+    print(post)
+    res = requests.post(payment_url+'/api/payment/checkout',json=post)
+    res = res.json()
+    print(res)
+    hash_uid = mongo.db.hash_counter.find_one({"id": 1})['hash_uid']
+    res['payment_uid'] = hash_uid
+    mongo.db.hash_map.insert_one({"hash_uid":hash_uid, "hash": res['hash'], "email": email, "status": 0 , "transaction_id": res['txnid'], "bank_ref_num": "", "mihpayid": ""}),
+    mongo.db.hash_counter.update_one({"id": 1}, {"$set": {"hash_uid": hash_uid+1}})
+    return res
+
+@app.route('/checkPaymentStatus',methods=['POST'])
+@cross_origin()
+@verify_token
+def checkPaymentStatus():
+    hash_uid = request.json['payment_uid']
+    payment_status = mongo.db.hash_map.find_one({"hash_uid": hash_uid})['status']
+    return jsonify({"payment_status": payment_status})
+
+@app.route('/payuSuccess',methods=['POST'])
+@cross_origin()
+def payuSuccess():
+    print(request.form)
+    bank_ref_num = request.form['bank_ref_num']
+    mihpayid = request.form['mihpayid']
+    transaction_id = request.form['txnid']
+    mongo.db.hash_map.update_one({"transaction_id": transaction_id},{"$set": {"status": 1, "bank_ref_num": bank_ref_num, "mihpayid": mihpayid}})
+    return render_template('index.html')
+
+@app.route('/payuFailure',methods=['POST'])
+@cross_origin()
+def payu():
+    transaction_id = request.form['txnid']
+    mongo.db.hash_map.update_one({"transaction_id": transaction_id},{"$set": {"status": -1}})
+    return render_template('fail.html')
+
+@app.route('/paymentSuccess',methods=['POST'])
+@cross_origin()
+@verify_token
+def payuFailure():
     token = request.headers['Authorization']
     decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
     email = decoded['email']
@@ -384,7 +445,7 @@ def paymentSuccess():
         mongo.db.clients.update_one({"email": email},{"$addToSet": {"roles": "paid_subscriber"}})
         mongo.db.transaction_history.insert_one({"email": email, "amount": amount, "transaction_id": transaction_id, "date": date})
         order_id = mongo.db.order_num.find_one({"id": 1})['order_id']
-        mongo.db.orders.insert_one({"email": email, "order_id": "EK-"+ str(order_id), "model_uid": model_uid , "date": date, "status": "pending"})
+        mongo.db.orders.insert_one({"email": email, "order_id": "EK-"+ str(order_id), "model_uid": model_uid , "date": date, "status": "pending", "deliveryDate": ""})
         mongo.db.device_ids.insert_one({"email":email, "device_id": "epanipuricart.dummy.1"})
         mongo.db.order_history.insert_one({"order_id": order_id, "status": "pending", "date": date})
         mongo.db.order_num.update_one({"id": 1}, {"$set": {"order_id": order_id+1}})
@@ -425,7 +486,24 @@ def getLatestOrder():
 @cross_origin()
 @verify_token
 def getAllOrders():
-    try:
+
+    data = mongo.db.orders.find().sort("date",-1)
+    all_orders = []
+    for items in data:
+        if items['status'] != 'pending':
+            d = {}
+            email = mongo.db.docs.find_one({"order_id": items['order_id']})['email']
+            name1 = mongo.db.clients.find_one({"email": email})['firstName']
+            name2 = mongo.db.clients.find_one({"email": email})['lastName']
+            d['email'] = email
+            d['name'] = name1 + " "+ name2
+            for keys in items:
+                if keys != "_id":
+                    d[keys] = items[keys]
+            all_orders.append(d) 
+
+    return jsonify({"orders": all_orders})
+    '''try:
         data = mongo.db.orders.find().sort("date",-1)
         all_orders = []
         for items in data:
@@ -441,10 +519,10 @@ def getAllOrders():
 
         return jsonify({"orders": all_orders})
     except:
-        return jsonify({"message": "Some error occurred"}), 500
+        return jsonify({"message": "Some error occurred"}), 500'''
 
 
-@app.route('/uploadDocuments',methods=['POSt'])
+@app.route('/uploadDocuments',methods=['POST'])
 @cross_origin()
 @verify_token
 def uploadDocuments():
@@ -991,8 +1069,9 @@ def saveFigures():
 def updateOrder():
     order_id = request.json['order_id']
     status = request.json['status']
+    deliveryDate = request.json['deliveryDate']
     try:
-        mongo.db.orders.update_one({"order_id": order_id}, {"$set": {"status": status, "date": int(round(time.time() * 1000))}})
+        mongo.db.orders.update_one({"order_id": order_id}, {"$set": {"status": status, "date": int(round(time.time() * 1000)), "deliverDate": deliveryDate}})
         mongo.db.order_history.insert_one({"order_id": order_id , "status": status, "date": int(round(time.time() * 1000))})
         return jsonify({"message": "Success"})
     except:
