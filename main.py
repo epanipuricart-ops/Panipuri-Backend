@@ -55,6 +55,12 @@ def verify_token(f):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
+def get_last_id(city):
+    data = mongo.db.city_wise_count.find_one_and_update({}, {"$inc":{city:1}})
+    new_id = "epanipuricart."+city+"."+str(data[city])
+    return new_id
+
 @app.route('/register/<path:path>',methods=['POST'])
 @cross_origin()
 def register(path):
