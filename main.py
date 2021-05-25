@@ -1083,7 +1083,7 @@ def updateOrder():
     except:
         return jsonify({"message": "Some Error Occurred"}), 500
 
-@app.route('/getPersonalOrders',methods=['POST'])
+@app.route('/getPersonalOrders', methods=['POST'])
 @cross_origin()
 @verify_token
 def getPersonalOrders():
@@ -1092,6 +1092,16 @@ def getPersonalOrders():
     email = decoded['email']
     orders_list = mongo.db.orders.find({"email":email},{"_id":0}).sort("date",-1)
     return jsonify(list(orders_list))
+
+
+@app.route('/getTrackingHistory', methods=['GET'])
+@cross_origin()
+@verify_token
+def getTrackingHistory():
+    order_id = request.args.get('order_id')
+    order_history = mongo.db.order_history.find({"order_id":order_id},{"_id":0}).sort("date",-1)
+    return jsonify(list(order_history))
+
 
 if __name__ == "__main__":
     print("starting...")
