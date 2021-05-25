@@ -1083,6 +1083,16 @@ def updateOrder():
     except:
         return jsonify({"message": "Some Error Occurred"}), 500
 
+@app.route('/getPersonalOrders',methods=['POST'])
+@cross_origin()
+@verify_token
+def getPersonalOrders():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
+    email = decoded['email']
+    orders_list = mongo.db.orders.find({"email":email},{"_id":0}).sort("date",-1)
+    return jsonify(list(orders_list))
+
 if __name__ == "__main__":
     print("starting...")
     app.run(host= cfg.Flask['HOST'] , port=cfg.Flask['PORT'], threaded=cfg.Flask['THREADED'],debug=True)
