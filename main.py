@@ -5,6 +5,7 @@ from flask import jsonify
 from flask_cors import CORS , cross_origin
 import time
 import os
+import binascii
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import config.config as cfg
@@ -19,6 +20,7 @@ import json
 import random
 
 UPLOAD_FOLDER = 'public/img'
+AGREEMENT_PDF_FOLDER = 'public/agreement_pdf'
 #INTERMEDIATE_FOLDER = 'intermediate'
 ALLOWED_EXTENSIONS = { 'png', 'jpg', 'jpeg'}
 
@@ -1101,6 +1103,31 @@ def getTrackingHistory():
     order_id = request.args.get('order_id')
     order_history = mongo.db.order_history.find({"order_id":order_id},{"_id":0}).sort("date",-1)
     return jsonify(list(order_history))
+
+
+@app.route('/uploadAgreement', methods=['POST'])
+@cross_origin()
+@verify_token
+def uploadAgreement():
+    email = request.form.get('customerEmail')
+    agreement_file = request.files.get('file')
+    if not email:
+        return jsonify({"message": "No email provided"}), 400
+    if not agreement_file:
+        return jsonify({"message": "No file provided"}), 400
+    if agreement_file.filename.endswith(".pdf"):
+        hex_form = binascii.b2a_hex(os.urandom(5)).decode()
+        mail_part = email.split('@')[0]
+        enc_filename = "agreement_" + mail_part + "_" + hex_form + ".pdf"
+        enc_filename = secure_filename(enc_filename)
+        try:
+            save_path = os.path.abspath(os.path.join(AGREEMENT_PDF_FOLDER, enc_filename))
+            mongo.db.docs.update_one({"email": email},{"$set": {"agreement_pdf": save_path}})
+            agreement_file.save(save_path)
+            return jsonify({"message": "Success"})
+        except:
+            return jsonify({"message": "Some Error Occurred"}), 500
+    return jsonify({"message": "Only PDF files allowed"}), 400
 
 
 if __name__ == "__main__":
