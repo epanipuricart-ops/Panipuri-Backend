@@ -384,7 +384,7 @@ def payNow():
 
     post = {
         "key": global_key,
-        "amount": str(model_data['price']),
+        "amount": str(0.5*model_data['price']),
         "phone": phone,
         "productinfo": (model_data['name'] + " "+ model_data['extension']).rstrip(),
         "surl": "http://15.207.147.88:5000/payuSuccess",
@@ -399,7 +399,7 @@ def payNow():
     print(res)
     hash_uid = mongo.db.hash_counter.find_one({"id": 1})['hash_uid']
     res['payment_uid'] = hash_uid
-    mongo.db.hash_map.insert_one({"hash_uid":hash_uid, "hash": res['hash'], "email": email, "status": 0 , "transaction_id": res['txnid'], "bank_ref_num": "", "mihpayid": ""}),
+    mongo.db.hash_map.insert_one({"hash_uid":hash_uid, "hash": res['hash'], "email": email, "amount": 0.5*model_data['price'],"status": 0 , "transaction_id": res['txnid'], "bank_ref_num": "", "mihpayid": ""}),
     mongo.db.hash_counter.update_one({"id": 1}, {"$set": {"hash_uid": hash_uid+1}})
     return res
 
@@ -536,7 +536,7 @@ def uploadDocuments():
     else:
         data = mongo.db.docs.find_one({"order_id": order_id})
         if data == None:
-            mongo.db.docs.insert_one({"email": email, "sign": "", "aadhar": "", "photo": "", "order_id": order_id, "pdf": ""})
+            mongo.db.docs.insert_one({"email": email, "sign": "", "aadhar": "", "photo": "", "order_id": order_id, "pdf": "", "agreement-pdf": ""})
         files = request.files.getlist('files[]')
         for file in files:
             if file and allowed_file(file.filename):
