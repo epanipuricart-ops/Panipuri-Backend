@@ -560,10 +560,10 @@ def payNow():
         "service_provider":
         "payu_paisa"
     }
-    #print(post)
+    # print(post)
     res = requests.post(payment_url + '/api/payment/checkout', json=post)
     res = res.json()
-    #print(res)
+    # print(res)
     hash_uid = mongo.db.hash_counter.find_one({"id": 1})['hash_uid']
     res['payment_uid'] = hash_uid
     mongo.db.hash_map.insert_one({
@@ -788,7 +788,7 @@ def uploadDocuments():
         return jsonify({"message": "Missing files"}), 400
     else:
         data = mongo.db.docs.find_one({"order_id": order_id})
-        if data == None:
+        if data is None:
             mongo.db.docs.insert_one({
                 "email": email,
                 "sign": "",
@@ -1018,27 +1018,27 @@ def getTrackingHistory():
 @cross_origin()
 @verify_token
 def uploadAgreement():
-    email = request.form.get('customerEmail')
+    orderId = request.form.get('orderId')
     agreement_file = request.files.get('file')
-    if not email:
-        return jsonify({"message": "No email provided"}), 400
+    if not orderId:
+        return jsonify({"message": "No order ID provided"}), 400
     if not agreement_file:
         return jsonify({"message": "No file provided"}), 400
     if agreement_file.filename.endswith(".pdf"):
         hex_form = binascii.b2a_hex(os.urandom(5)).decode()
-        mail_part = email.split('@')[0]
-        enc_filename = "agreement_" + mail_part + "_" + hex_form + ".pdf"
+        enc_filename = "agreement_" + orderId + "_" + hex_form + ".pdf"
         enc_filename = secure_filename(enc_filename)
         try:
             save_path = os.path.abspath(
                 os.path.join(AGREEMENT_PDF_FOLDER, enc_filename))
-            mongo.db.docs.update_one({"email": email},
+            mongo.db.docs.update_one({"order_id": orderId},
                                      {"$set": {
-                                         "agreement_pdf": save_path
+                                         "agreement_pdf": save_path,
+                                         "eAadharSign": 0
                                      }})
             agreement_file.save(save_path)
             return jsonify({"message": "Success"})
-        except:
+        except Exception:
             return jsonify({"message": "Some Error Occurred"}), 500
     return jsonify({"message": "Only PDF files allowed"}), 400
 
@@ -1049,4 +1049,4 @@ if __name__ == "__main__":
             port=cfg.Flask['PORT'],
             threaded=cfg.Flask['THREADED'],
             debug=True)
-    #app.run(debug=True)
+    # app.run(debug=True)
