@@ -60,9 +60,14 @@ def allowed_file(filename):
 
 def get_last_id(city):
     data = mongo.db.city_wise_count.find_one_and_update({}, {"$inc":{city:1}})
-    new_id = "epanipuricart."+city+"."+str(data[city])
+    if data:
+        new_id = "epanipuricart."+city+"."+str(data[city])
+    else:
+        new_id = "epanipuricart.dummy.5"
     return new_id
 
+
+    
 @app.route('/register/<path:path>',methods=['POST'])
 @cross_origin()
 def register(path):
@@ -383,7 +388,7 @@ def updateCosting():
 def payNow():
     token = request.headers['Authorization']
     decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
-    model_uid = request.json['uid']
+    model_uid = int(request.json['uid'])
     model_data = mongo.db.costing.find_one({"uid": model_uid})
     email = decoded['email']
     client_data = mongo.db.clients.find_one({"email": email})
@@ -401,13 +406,13 @@ def payNow():
         "email": email,
         "service_provider": "payu_paisa"
     }
-    print(post)
+    #print(post)
     res = requests.post(payment_url+'/api/payment/checkout',json=post)
     res = res.json()
-    print(res)
+    #print(res)
     hash_uid = mongo.db.hash_counter.find_one({"id": 1})['hash_uid']
     res['payment_uid'] = hash_uid
-    mongo.db.hash_map.insert_one({"hash_uid":hash_uid, "hash": res['hash'], "email": email, "amount": 0.5*model_data['price'],"status": 0 , "transaction_id": res['txnid'], "bank_ref_num": "", "mihpayid": ""}),
+    mongo.db.hash_map.insert_one({"hash_uid":hash_uid, "initiated_date": int(round(time.time() *1000)),"hash": res['hash'], "email": email,"model_uid": model_uid, "amount": 0.5*model_data['price'],"status": 0 , "transaction_id": res['txnid'], "bank_ref_num": "", "mihpayid": ""}),
     mongo.db.hash_counter.update_one({"id": 1}, {"$set": {"hash_uid": hash_uid+1}})
     return res
 
@@ -422,55 +427,61 @@ def checkPaymentStatus():
 @app.route('/payuSuccess',methods=['POST'])
 @cross_origin()
 def payuSuccess():
-    print(request.form)
+    date = int(round(time.time() *1000))
     bank_ref_num = request.form['bank_ref_num']
     mihpayid = request.form['mihpayid']
     transaction_id = request.form['txnid']
+    txn_data = mongo.db.hash_map.find_one({"transaction_id": transaction_id})
     mongo.db.hash_map.update_one({"transaction_id": transaction_id},{"$set": {"status": 1, "bank_ref_num": bank_ref_num, "mihpayid": mihpayid}})
+    mongo.db.clients.update_one({"email": txn_data['email']},{"$addToSet": {"roles": "paid_subscriber"}})
+    mongo.db.transaction_history.insert_one({"transaction_id": transaction_id, "completedDate": date})
+    order_id = mongo.db.order_num.find_one({"id": 1})['order_id']
+    mongo.db.orders.insert_one({"email": txn_data['email'], "order_id": "EK-"+ str(order_id), "model_uid": txn_data['model_uid'] , "date": date, "status": "pending", "deliveryDate": ""})
+    city = mongo.db.general_forms.find_one({"email": txn_data['email']})['town']
+    device_id = get_last_id(city)
+    mongo.db.device_ids.insert_one({"email":txn_data['email'], "device_id": device_id})
+    mongo.db.order_history.insert_one({"order_id": order_id, "status": "pending", "date": date})
+    mongo.db.order_num.update_one({"id": 1}, {"$set": {"order_id": order_id+1}})
+    payload = {
+                "attachmentPaths": [],
+                "bccAddresses": [],
+                "ccAddresses": [],
+                "mailBody": "Your payment is confirmed.",
+                "mailSubject": "Payment Confirmation",
+                "toAddresses": [
+                    txn_data['email'], "ceo@epanipuricart.com"
+                ]
+            }
+    requests.post(mailer_url+'send-mail', json=payload)
     return render_template('index.html')
 
 @app.route('/payuFailure',methods=['POST'])
 @cross_origin()
-def payu():
+def payuFailure():
     transaction_id = request.form['txnid']
     mongo.db.hash_map.update_one({"transaction_id": transaction_id},{"$set": {"status": -1}})
     return render_template('fail.html')
 
-@app.route('/paymentSuccess',methods=['POST'])
+@app.route('/getPrescription',methods=['GET'])
+@cross_origin()
+def prescription():
+    return render_template('prescription.html')
+@app.route('/getImg',methods=['GET'])
+@cross_origin()
+def getImg():
+    return send_from_directory('templates','about_sign.png')
+
+@app.route('/getModelImage/<path:path>',methods=['GET'])
 @cross_origin()
 @verify_token
-def payuFailure():
-    token = request.headers['Authorization']
-    decoded = jwt.decode(token, options={"verify_signature": False, "verify_aud": False})
-    email = decoded['email']
-    transaction_id = request.json['transactionId']
-    model_uid = request.json['uid']
-    date = int(round(time.time() *1000))
+def getModelImage(path):
+    return send_from_directory('public/model-images',path)
 
-    try:
-        original_amount = mongo.db.costing.find_one({"uid": model_uid})['price']
-        amount = 0.5 * float(original_amount)
-        mongo.db.clients.update_one({"email": email},{"$addToSet": {"roles": "paid_subscriber"}})
-        mongo.db.transaction_history.insert_one({"email": email, "amount": amount, "transaction_id": transaction_id, "date": date})
-        order_id = mongo.db.order_num.find_one({"id": 1})['order_id']
-        mongo.db.orders.insert_one({"email": email, "order_id": "EK-"+ str(order_id), "model_uid": model_uid , "date": date, "status": "pending", "deliveryDate": ""})
-        mongo.db.device_ids.insert_one({"email":email, "device_id": "epanipuricart.dummy.1"})
-        mongo.db.order_history.insert_one({"order_id": order_id, "status": "pending", "date": date})
-        mongo.db.order_num.update_one({"id": 1}, {"$set": {"order_id": order_id+1}})
-        payload = {
-                    "attachmentPaths": [],
-                    "bccAddresses": [],
-                    "ccAddresses": [],
-                    "mailBody": "Your payment is confirmed.",
-                    "mailSubject": "Payment Confirmation",
-                    "toAddresses": [
-                        "jyotimay16@gmail.com"
-                    ]
-                }
-        requests.post(mailer_url+'send-mail', json=payload)
-        return jsonify({"message": "Success", "order_id": "EK-"+str(order_id)})
-    except:
-        return jsonify({"message": "Some Error Occurred"}), 500
+@app.route('/getAgreementData',methods=['GET'])
+@cross_origin()
+@verify_token
+def getAgreementData():
+    return jsonify({"result": [{"variablePdf": "sample.pdf", "fixedPdf": "sample1.pdf", "order_id":"EK-125"}]})
 
 
 @app.route('/getLatestOrder',methods=['GET'])
@@ -544,12 +555,11 @@ def uploadDocuments():
     else:
         data = mongo.db.docs.find_one({"order_id": order_id})
         if data == None:
-            mongo.db.docs.insert_one({"email": email, "sign": "", "aadhar": "", "photo": "", "order_id": order_id, "pdf": "", "agreement-pdf": ""})
+            mongo.db.docs.insert_one({"email": email, "sign": "", "aadhar": "", "photo": "", "order_id": order_id, "pdf": "", "agreement-pdf": "", "eAadharSign": -1})
         files = request.files.getlist('files[]')
         for file in files:
             if file and allowed_file(file.filename):
                 for ele in request.form:
-                    print(ele)
                     if file.filename.lower() == request.form[ele].lower():
                         filename_temp = secure_filename(file.filename)
                         extension = filename_temp.split('.')[-1] 
@@ -588,8 +598,7 @@ def uploadDocuments():
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-        }
-        print(post)     
+        }     
         try:
             response = requests.post(agreement_url+'generate-agreement', data= json.dumps(post), headers=headers)
             print(response.text)
@@ -1085,7 +1094,7 @@ def updateOrder():
     except:
         return jsonify({"message": "Some Error Occurred"}), 500
 
-@app.route('/getPersonalOrders', methods=['POST'])
+@app.route('/getPersonalOrders', methods=['GET'])
 @cross_origin()
 @verify_token
 def getPersonalOrders():
