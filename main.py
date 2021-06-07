@@ -4,6 +4,7 @@ from flask import request, redirect, url_for
 from flask_pymongo import PyMongo
 from flask import jsonify
 from flask_cors import CORS, cross_origin
+from flask_apscheduler import APScheduler
 import time
 import os
 import binascii
@@ -19,6 +20,7 @@ from functools import wraps
 import requests
 import json
 import random
+import shutil
 
 UPLOAD_FOLDER = 'public/img'
 AGREEMENT_PDF_FOLDER = 'public/agreement_pdf'
@@ -26,11 +28,15 @@ AGREEMENT_PDF_FOLDER = 'public/agreement_pdf'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 app = Flask(__name__, static_url_path='')
+
 CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
 
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
@@ -764,7 +770,7 @@ def getAllOrders():
             for keys in items:
                 if keys != "_id":
                     d[keys] = items[keys]
-            all_orders.append(d) 
+            all_orders.append(d)
 
         return jsonify({"orders": all_orders})
     except:
@@ -827,7 +833,7 @@ def uploadDocuments():
 
         user_data = mongo.db.general_forms.find_one({"email": email})
         docs_data = mongo.db.docs.find_one({"email": email})
-        #base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
+        # base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
         name = user_data['title'] + user_data['firstName'] + " " + user_data[
             'lastName']
         aadhar = user_data['aadhar']
@@ -1041,6 +1047,17 @@ def uploadAgreement():
         except Exception:
             return jsonify({"message": "Some Error Occurred"}), 500
     return jsonify({"message": "Only PDF files allowed"}), 400
+
+
+@scheduler.task('cron', id='move_pdf', minute=0, hour=0)
+def move_agreement_pdf():
+    source_dir = 'public/agreement_pdf'
+    target_dir = 'tmp/backup_pdf'
+    os.makedirs(target_dir, exist_ok=True)
+    file_names = os.listdir(source_dir)
+    for file_name in file_names:
+        shutil.move(os.path.join(source_dir, file_name), target_dir)
+    print(str(len(file_names)) + " Moved!!")
 
 
 if __name__ == "__main__":
