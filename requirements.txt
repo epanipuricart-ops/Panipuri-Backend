@@ -2,3 +2,4 @@ pymongo
 Flask
 Flask-Cors
 Flask-PyMongo
+Flask-APScheduler
