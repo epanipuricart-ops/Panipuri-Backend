@@ -1049,6 +1049,16 @@ def uploadAgreement():
     return jsonify({"message": "Only PDF files allowed"}), 400
 
 
+@app.route('/subscribeNewsletter', methods=['POST'])
+@cross_origin()
+def subscribeNewsletter():
+    emailID = request.form.get('email')
+    if emailID:
+        mongo.db.newsletter.insert_one({"email": emailID})
+        return jsonify({"message": "Success"})
+    return jsonify({"message": "No email provided"}), 400
+
+
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
 def move_agreement_pdf():
     source_dir = 'public/agreement_pdf'
