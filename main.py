@@ -24,6 +24,7 @@ import shutil
 
 UPLOAD_FOLDER = 'public/img'
 AGREEMENT_PDF_FOLDER = 'public/agreement_pdf'
+BLOG_PHOTO_FOLDER = 'public/blog'
 # INTERMEDIATE_FOLDER = 'intermediate'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
@@ -705,12 +706,29 @@ def getModelImage(path):
 @cross_origin()
 @verify_token
 def getAgreementData():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded["email"]
+    response = mongo.db.docs.find(
+        {
+            "email": email,
+            "eAadharSign": 1
+        }, {"_id": 0})
+    result = []
+    for document in response:
+        result.append(
+            {
+                "variablePdf": document.get("pdf"),
+                "fixedPdf": document.get("agreement_pdf"),
+                "order_id": document.get("order_id"),
+                "eAadharSign": 1
+            })
     return jsonify({
-        "result": [{
-            "variablePdf": "sample.pdf",
-            "fixedPdf": "sample1.pdf",
-            "order_id": "EK-125"
-        }]
+        "result": result
     })
 
 
@@ -1057,6 +1075,36 @@ def subscribeNewsletter():
         mongo.db.newsletter.insert_one({"email": emailID})
         return jsonify({"message": "Success"})
     return jsonify({"message": "No email provided"}), 400
+
+
+@app.route('/saveBlog', methods=['POST'])
+@cross_origin()
+@verify_token
+def saveBlog():
+    title = request.form.get('title')
+    photo = request.files.get('photo')
+    content = request.form.get('content')
+    if not photo:
+        return jsonify({"message": "No file provided"}), 400
+    ext = photo.filename.lower().split(".")[-1]
+    if ext in ["jpg", "png"]:
+        hex_form = binascii.b2a_hex(os.urandom(10)).decode()
+        enc_filename = "photo_" + hex_form + "." + ext
+        enc_filename = secure_filename(enc_filename)
+        try:
+            save_path = os.path.abspath(
+                os.path.join(BLOG_PHOTO_FOLDER, enc_filename))
+            mongo.db.blogs.insert_one(
+                {
+                    "title": title,
+                    "content": content,
+                    "photo": save_path
+                })
+            photo.save(save_path)
+            return jsonify({"message": "Success"})
+        except:
+            return jsonify({"message": "Some Error Occurred"}), 500
+    return jsonify({"message": "Only JPG/PNG files allowed"}), 400
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
