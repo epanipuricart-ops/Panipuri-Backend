@@ -634,6 +634,9 @@ def payuSuccess():
         "transaction_id": transaction_id,
         "completedDate": date
     })
+
+    model_uid = txn_data['model_uid']
+    model_image = mongo.db.costing.find_one({"uid": model_uid})['model_image']
     order_id = mongo.db.order_num.find_one({"id": 1})['order_id']
     mongo.db.orders.insert_one({
         "email": txn_data['email'],
@@ -641,6 +644,7 @@ def payuSuccess():
         "model_uid": txn_data['model_uid'],
         "date": date,
         "status": "pending",
+        "model_image": model_image,
         "deliveryDate": ""
     })
     city = mongo.db.general_forms.find_one({"email":
@@ -688,11 +692,6 @@ def prescription():
     return render_template('prescription.html')
 
 
-@app.route('/getImg', methods=['GET'])
-@cross_origin()
-def getImg():
-    return send_from_directory('templates', 'about_sign.png')
-
 
 @app.route('/getModelImage/<path:path>', methods=['GET'])
 @cross_origin()
@@ -707,9 +706,10 @@ def getModelImage(path):
 def getAgreementData():
     return jsonify({
         "result": [{
-            "variablePdf": "sample.pdf",
-            "fixedPdf": "sample1.pdf",
-            "order_id": "EK-125"
+            "variablePdf": "sample.pdf", #pdf
+            "fixedPdf": "sample1.pdf", #agreement-pdf
+            "order_id": "EK-125",
+            "eSignAadhaar": 1 #only 1 value 
         }]
     })
 
@@ -1043,6 +1043,7 @@ def uploadAgreement():
                                          "eAadharSign": 0
                                      }})
             agreement_file.save(save_path)
+
             return jsonify({"message": "Success"})
         except Exception:
             return jsonify({"message": "Some Error Occurred"}), 500
