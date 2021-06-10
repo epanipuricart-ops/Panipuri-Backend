@@ -781,7 +781,8 @@ def getAllOrders():
         all_orders = []
         for items in data:
             d = {}
-            email = mongo.db.docs.find_one({"order_id": items['order_id']})['email']
+            email = mongo.db.docs.find_one(
+                {"order_id": items['order_id']})['email']
             name = mongo.db.clients.find_one({"email"})['name']
             d['email'] = email
             d['name'] = name
@@ -1105,6 +1106,17 @@ def saveBlog():
         except:
             return jsonify({"message": "Some Error Occurred"}), 500
     return jsonify({"message": "Only JPG/PNG files allowed"}), 400
+
+
+@app.route('/getClients', methods=['GET'])
+@cross_origin()
+@verify_token
+def getClients():
+    roles_list = request.args.get('roles', "").split(",")
+    clients = mongo.db.clients.find(
+        {"roles": {"$all": roles_list}},
+        {"_id": 0, "firebase_id": 0})
+    return jsonify({"clients": list(clients)})
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
