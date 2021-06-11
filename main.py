@@ -1099,13 +1099,21 @@ def saveBlog():
                 {
                     "title": title,
                     "content": content,
-                    "photo": save_path
+                    "photo": save_path,
+                    "date": int(round(time.time() * 1000)),
                 })
             photo.save(save_path)
             return jsonify({"message": "Success"})
         except:
             return jsonify({"message": "Some Error Occurred"}), 500
     return jsonify({"message": "Only JPG/PNG files allowed"}), 400
+
+
+@app.route('/getAllBlogs', methods=['GET'])
+@cross_origin()
+def getAllBlogs():
+    blogs_list = mongo.db.blogs.find({}, {"_id": 0})
+    return jsonify({"blogs": list(blogs_list)})
 
 
 @app.route('/getClients', methods=['GET'])
@@ -1117,6 +1125,17 @@ def getClients():
         {"roles": {"$all": roles_list}},
         {"_id": 0, "firebase_id": 0})
     return jsonify({"clients": list(clients)})
+
+
+@app.route('/getMenu', methods=['GET'])
+@cross_origin()
+@verify_token
+def getMenu():
+    cartId = request.args.get("cartId")
+    if not cartId:
+        return jsonify({"message": "No Cart ID sent"}), 400
+    cart = mongo.db.menu.find_one({"cartId": cartId}, {"_id": 0})
+    return jsonify(cart or {})
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
