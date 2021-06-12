@@ -1084,10 +1084,11 @@ def saveBlog():
     title = request.form.get('title')
     photo = request.files.get('photo')
     content = request.form.get('content')
+    print('photo')
     if not photo:
         return jsonify({"message": "No file provided"}), 400
     ext = photo.filename.lower().split(".")[-1]
-    if ext in ["jpg", "png"]:
+    if ext in ["jpg", "png", "PNG", "jpeg"]:
         hex_form = binascii.b2a_hex(os.urandom(10)).decode()
         enc_filename = "photo_" + hex_form + "." + ext
         enc_filename = secure_filename(enc_filename)
