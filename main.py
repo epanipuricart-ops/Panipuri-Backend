@@ -1085,7 +1085,6 @@ def saveBlog():
     title = request.form.get('title')
     photo = request.files.get('photo')
     content = request.form.get('content')
-    print('photo')
     if not photo:
         return jsonify({"message": "No file provided"}), 400
     ext = photo.filename.lower().split(".")[-1]
@@ -1094,13 +1093,12 @@ def saveBlog():
         enc_filename = "photo_" + hex_form + "." + ext
         enc_filename = secure_filename(enc_filename)
         try:
-            save_path = os.path.abspath(
-                os.path.join(BLOG_PHOTO_FOLDER, enc_filename))
+            save_path = os.path.join(BLOG_PHOTO_FOLDER, enc_filename)
             mongo.db.blogs.insert_one(
                 {
                     "title": title,
                     "content": content,
-                    "photo": save_path,
+                    "photo": enc_filename,
                     "date": int(round(time.time() * 1000)),
                 })
             photo.save(save_path)
@@ -1116,6 +1114,10 @@ def getAllBlogs():
     blogs_list = mongo.db.blogs.find({}, {"_id": 0})
     return jsonify({"blogs": list(blogs_list)})
 
+@app.route('/getBlogImage/<path:path>', methods=['GET'])
+@cross_origin()
+def getBlogImage(path):
+    return send_from_directory('public/blog', path)
 
 @app.route('/getClients', methods=['GET'])
 @cross_origin()
