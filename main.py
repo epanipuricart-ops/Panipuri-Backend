@@ -1091,6 +1091,7 @@ def saveBlog():
             save_path = os.path.join(BLOG_PHOTO_FOLDER, enc_filename)
             mongo.db.blogs.insert_one(
                 {
+                    "blogId": hex_form,
                     "title": title,
                     "content": content,
                     "photo": enc_filename,
@@ -1116,6 +1117,67 @@ def getBlogImage(path):
     return send_from_directory('public/blog', path)
 
 
+@app.route('/deleteBlog', methods=['POST'])
+@cross_origin()
+@verify_token
+def deleteBlog():
+    blogId = request.form.get('blogId')
+    if not blogId:
+        return jsonify({"message": "No Blog ID provided"}), 400
+    data = mongo.db.blogs.find_one_and_delete({"blogId": blogId})
+    try:
+        os.remove(os.path.abspath(
+            os.path.join(BLOG_PHOTO_FOLDER, data['photo'])))
+    except:
+        pass
+    return jsonify({"message": "Success"})
+
+
+@app.route('/updateBlog', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateBlog():
+    title = request.form.get('title')
+    photo = request.files.get('photo')
+    content = request.form.get('content')
+    blogId = request.form.get('blogId')
+    oldBlog = mongo.db.blogs.find_one({"blogId": blogId})
+    if not oldBlog:
+        return jsonify({"message": "No such blog found"}), 400
+    newBlog = {}
+    if title:
+        newBlog.update({"title": title})
+    if content:
+        newBlog.update({"content": content})
+    if photo:
+        try:
+            os.remove(os.path.abspath(
+                os.path.join(BLOG_PHOTO_FOLDER, oldBlog['photo'])))
+        except:
+            pass
+        ext = photo.filename.lower().split(".")[-1]
+        if ext in ["jpg", "png"]:
+            hex_form = binascii.b2a_hex(os.urandom(10)).decode()
+            enc_filename = "photo_" + hex_form + "." + ext
+            enc_filename = secure_filename(enc_filename)
+            try:
+                save_path = os.path.abspath(
+                    os.path.join(BLOG_PHOTO_FOLDER, enc_filename))
+                photo.save(save_path)
+                newBlog.update({"photo": enc_filename})
+            except:
+                return jsonify({"message": "Some Error Occurred"}), 500
+        else:
+            return jsonify({"message": "Only JPG/PNG files allowed"}), 400
+    if not newBlog:
+        return jsonify({"message": "No changes done."})
+    newBlog.update({"date": int(round(time.time() * 1000))})
+    mongo.db.blogs.update_one(
+        {"blogId": blogId},
+        {"$set": newBlog})
+    return jsonify({"message": "Success"})
+
+
 @app.route('/getClients', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -1138,15 +1200,18 @@ def getMenu():
     return jsonify(cart or {})
 
 
-@app.route('/updateMenu', methods=['POST'])
+@app.route('/updateMenu/<field>', methods=['POST'])
 @cross_origin()
 @verify_token
-def updateMenu():
+def updateMenu(field):
     data = request.json
-    if "itemId" in data:
+    if field == "item":
+        if not data.get("itemId"):
+            return jsonify({"message": "No Item ID sent"}), 400
+
         valid_fields = [
-            "name", "desc", "price",
-            "ingredients", "customDiscount"]
+            "name", "img", "desc", "price",
+            "ingredients", "customDiscount", "isOutOfStock"]
         updateItem = {"menu.$.items.$[t]."+field: value for field,
                       value in data.items() if field in valid_fields}
         mongo.db.menu.update_one(
@@ -1158,18 +1223,35 @@ def updateMenu():
             },
             array_filters=[{"t.itemId": data.get("itemId")}]
         )
-    elif "categoryId" in data:
-        category = data.get("category", "")
+    elif field == "category":
+        if not data.get("categoryId"):
+            return jsonify({"message": "No Category ID sent"}), 400
+
+        valid_fields = ["category", "closeCategory"]
+        updateCategory = {"menu.$."+field: value for field,
+                          value in data.items() if field in valid_fields}
         mongo.db.menu.update_one(
             {
                 "menu.categoryId": data.get("categoryId")
             },
             {
-                "$set":
-                {"menu.$.category": category}
+                "$set": updateCategory
+            })
+    elif field == "cart":
+        if not data.get("cartId"):
+            return jsonify({"message": "No Cart ID sent"}), 400
+        valid_fields = ["isActive"]
+        updateCart = {field: value for field,
+                      value in data.items() if field in valid_fields}
+        mongo.db.menu.update_one(
+            {
+                "cartId": data.get("cartId")
+            },
+            {
+                "$set": updateCart
             })
     else:
-        return jsonify({"message": "No Category/Item ID sent"}), 400
+        return jsonify({"message": "Invalid field"}), 400
     return jsonify({"message": "Sucess"})
 
 
