@@ -693,7 +693,6 @@ def prescription():
     return render_template('prescription.html')
 
 
-
 @app.route('/getModelImage/<path:path>', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -984,22 +983,20 @@ def saveFigures():
 def updateOrder():
     order_id = request.json['order_id']
     status = request.json['status']
-    deliveryDate = request.json['deliveryDate']
+    deliveryDate = request.json.get('deliveryDate')
+    order = {"order_id": order_id, "status": status}
+    if mongo.db.order_history.find_one(order):
+        return jsonify({"message": "Status already used"}), 500
+    if deliveryDate:
+        order.update({"deliverDate": deliveryDate})
     try:
-        mongo.db.orders.update_one({"order_id": order_id}, {
-            "$set": {
-                "status": status,
-                "date": int(round(time.time() * 1000)),
-                "deliverDate": deliveryDate
-            }
-        })
+        mongo.db.orders.update_one(
+            {"order_id": order_id},
+            {"$set": order})
         mongo.db.order_history.insert_one({
-            "order_id":
-            order_id,
-            "status":
-            status,
-            "date":
-            int(round(time.time() * 1000))
+            "order_id": order_id,
+            "status": status,
+            "date": int(round(time.time() * 1000))
         })
         return jsonify({"message": "Success"})
     except:
@@ -1017,11 +1014,9 @@ def getPersonalOrders():
                              "verify_aud": False
                          })
     email = decoded['email']
-    orders_list = mongo.db.orders.find({
-        "email": email
-    }, {
-        "_id": 0
-    }).sort("date", -1)
+    orders_list = mongo.db.orders.find(
+        {"email": email},
+        {"_id": 0}).sort("date", -1)
     return jsonify(list(orders_list))
 
 
@@ -1114,10 +1109,12 @@ def getAllBlogs():
     blogs_list = mongo.db.blogs.find({}, {"_id": 0})
     return jsonify({"blogs": list(blogs_list)})
 
+
 @app.route('/getBlogImage/<path:path>', methods=['GET'])
 @cross_origin()
 def getBlogImage(path):
     return send_from_directory('public/blog', path)
+
 
 @app.route('/getClients', methods=['GET'])
 @cross_origin()
@@ -1139,6 +1136,41 @@ def getMenu():
         return jsonify({"message": "No Cart ID sent"}), 400
     cart = mongo.db.menu.find_one({"cartId": cartId}, {"_id": 0})
     return jsonify(cart or {})
+
+
+@app.route('/updateMenu', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateMenu():
+    data = request.json
+    if "itemId" in data:
+        valid_fields = [
+            "name", "desc", "price",
+            "ingredients", "customDiscount"]
+        updateItem = {"menu.$.items.$[t]."+field: value for field,
+                      value in data.items() if field in valid_fields}
+        mongo.db.menu.update_one(
+            {
+                "menu.items.itemId": data.get("itemId")
+            },
+            {
+                "$set": updateItem
+            },
+            array_filters=[{"t.itemId": data.get("itemId")}]
+        )
+    elif "categoryId" in data:
+        category = data.get("category", "")
+        mongo.db.menu.update_one(
+            {
+                "menu.categoryId": data.get("categoryId")
+            },
+            {
+                "$set":
+                {"menu.$.category": category}
+            })
+    else:
+        return jsonify({"message": "No Category/Item ID sent"}), 400
+    return jsonify({"message": "Sucess"})
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
