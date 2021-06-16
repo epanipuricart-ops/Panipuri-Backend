@@ -400,6 +400,11 @@ def saveGeneralForm():
         state = str(request.json['state'])
     else:
         state = ''
+    
+    if 'location' in request.json:
+        location = str(request.json['location'])
+    else:
+        location = ''
 
     if 'termsAndConditions' in request.json:
         termsAndConditions = str(request.json['termsAndConditions'])
@@ -420,6 +425,7 @@ def saveGeneralForm():
                     "town": town,
                     "pincode": pincode,
                     "state": state,
+                    "location": location,
                     "termsAndConditions": termsAndConditions
                 }
             })
