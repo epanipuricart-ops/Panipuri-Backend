@@ -400,7 +400,7 @@ def saveGeneralForm():
         state = str(request.json['state'])
     else:
         state = ''
-    
+
     if 'location' in request.json:
         location = str(request.json['location'])
     else:
@@ -654,12 +654,15 @@ def payuSuccess():
         "model_image": model_image,
         "deliveryDate": ""
     })
-    city = mongo.db.general_forms.find_one({"email":
-                                            txn_data['email']})['town']
+    data = mongo.db.general_forms.find_one({"email": txn_data['email']})
+    city = data['town']
     device_id = get_last_id(city)
     mongo.db.device_ids.insert_one({
         "email": txn_data['email'],
-        "device_id": device_id
+        "device_id": device_id,
+        "state": data.get("state"),
+        "town": city,
+        "location": data.get("location")
     })
     mongo.db.order_history.insert_one({
         "order_id": order_id,
@@ -1259,6 +1262,20 @@ def updateMenu(field):
     else:
         return jsonify({"message": "Invalid field"}), 400
     return jsonify({"message": "Sucess"})
+
+
+@app.route('/getAllLocations', methods=['GET'])
+@cross_origin()
+@verify_token
+def getAllLocations():
+    state = request.args.get("state")
+    town = request.args.get("town")
+    if state and town:
+        locations = mongo.db.device_ids.find(
+            {"state": state, "town": town},
+            {"_id": 0, "location": 1, "device_id": 1})
+        return jsonify({"locations": list(locations)})
+    return jsonify({"message": "No State/City provided"}), 400
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
