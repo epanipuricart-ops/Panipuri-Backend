@@ -82,6 +82,10 @@ def get_last_id(city):
     return new_id
 
 
+def generate_custom_id(size=10):
+    return binascii.b2a_hex(os.urandom(size//2)).decode()
+
+
 @app.route('/register/<path:path>', methods=['POST'])
 @cross_origin()
 def register(path):
@@ -1053,7 +1057,7 @@ def uploadAgreement():
     if not agreement_file:
         return jsonify({"message": "No file provided"}), 400
     if agreement_file.filename.endswith(".pdf"):
-        hex_form = binascii.b2a_hex(os.urandom(5)).decode()
+        hex_form = generate_custom_id(10)
         enc_filename = "agreement_" + orderId + "_" + hex_form + ".pdf"
         enc_filename = secure_filename(enc_filename)
         try:
@@ -1093,7 +1097,7 @@ def saveBlog():
         return jsonify({"message": "No file provided"}), 400
     ext = photo.filename.lower().split(".")[-1]
     if ext in ["jpg", "png", "PNG", "jpeg"]:
-        hex_form = binascii.b2a_hex(os.urandom(10)).decode()
+        hex_form = generate_custom_id(20)
         enc_filename = "photo_" + hex_form + "." + ext
         enc_filename = secure_filename(enc_filename)
         try:
@@ -1166,7 +1170,7 @@ def updateBlog():
             pass
         ext = photo.filename.lower().split(".")[-1]
         if ext in ["jpg", "png"]:
-            hex_form = binascii.b2a_hex(os.urandom(10)).decode()
+            hex_form = generate_custom_id(20)
             enc_filename = "photo_" + hex_form + "." + ext
             enc_filename = secure_filename(enc_filename)
             try:
@@ -1214,6 +1218,9 @@ def getMenu():
 @verify_token
 def updateMenu(field):
     data = request.json
+    if data is None:
+        return jsonify({"message": "No JSON data sent"}), 400
+
     if field == "item":
         if not data.get("itemId"):
             return jsonify({"message": "No Item ID sent"}), 400
@@ -1276,6 +1283,79 @@ def getAllLocations():
             {"_id": 0, "location": 1, "device_id": 1})
         return jsonify({"locations": list(locations)})
     return jsonify({"message": "No State/City provided"}), 400
+
+
+@app.route('/getAllCategories', methods=['GET'])
+@cross_origin()
+@verify_token
+def getAllCategories():
+    categories = mongo.db.shopping_menu.find(
+        {}, {"_id": 0, "categoryId": 1, "category": 1})
+    return jsonify({"categories": list(categories)})
+
+
+@app.route('/getItemByCategory', methods=['GET'])
+@cross_origin()
+@verify_token
+def getItemByCategory():
+    category_list = request.args.get('categoryId', "").split(",")
+    items = mongo.db.shopping_menu.find(
+        {"categoryId": {"$in": category_list}},
+        {"_id": 0})
+    return jsonify({"items": list(items)})
+
+
+@app.route('/createShopCategory', methods=['POST'])
+@cross_origin()
+@verify_token
+def createShopCategory():
+    data = request.json
+    if data is None:
+        return jsonify({"message": "No JSON data sent"}), 400
+
+    valid_fields = ["category", "closeCategory"]
+    createCategory = {field: value for field,
+                      value in data.items() if field in valid_fields}
+
+    if len(valid_fields) == len(createCategory):
+        createCategory.update(
+            {"categoryId": generate_custom_id(10), "items": []})
+        mongo.db.shopping_menu.insert_one(createCategory)
+        return jsonify({
+            "message": "Success",
+            "categoryId": createCategory["categoryId"]})
+    return jsonify({"message": "Missing fields while creating category"}), 400
+
+
+@app.route('/createShopItem', methods=['POST'])
+@cross_origin()
+@verify_token
+def createShopItem():
+    data = request.json
+    if data is None:
+        return jsonify({"message": "No JSON data sent"}), 400
+
+    categoryId = data.get("categoryId")
+    if not categoryId:
+        return jsonify({"message": "No Category ID sent"}), 400
+
+    valid_fields = [
+        "name", "img", "desc", "price",
+        "ingredients", "customDiscount", "isOutOfStock"]
+    createItem = {field: value for field,
+                  value in data.items() if field in valid_fields}
+
+    if len(valid_fields) == len(createItem):
+        createItem.update({"itemId": generate_custom_id(10)})
+        mongo.db.shopping_menu.update_one(
+            {
+                "categoryId": categoryId
+            },
+            {
+                "$push": {"items": createItem}
+            })
+        return jsonify({"message": "Success"})
+    return jsonify({"message": "Missing fields while creating item"}), 400
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
