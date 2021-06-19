@@ -82,8 +82,11 @@ def get_last_id(city):
     return new_id
 
 
-def generate_custom_id(size=10):
-    return binascii.b2a_hex(os.urandom(size//2)).decode()
+def generate_custom_id():
+    return (
+        binascii.b2a_hex(os.urandom(4)).decode() +
+        hex(int(time.time()*10**5) % 10**12)[2:]
+    )
 
 
 @app.route('/register/<path:path>', methods=['POST'])
@@ -1057,7 +1060,7 @@ def uploadAgreement():
     if not agreement_file:
         return jsonify({"message": "No file provided"}), 400
     if agreement_file.filename.endswith(".pdf"):
-        hex_form = generate_custom_id(10)
+        hex_form = generate_custom_id()
         enc_filename = "agreement_" + orderId + "_" + hex_form + ".pdf"
         enc_filename = secure_filename(enc_filename)
         try:
@@ -1097,7 +1100,7 @@ def saveBlog():
         return jsonify({"message": "No file provided"}), 400
     ext = photo.filename.lower().split(".")[-1]
     if ext in ["jpg", "png", "PNG", "jpeg"]:
-        hex_form = generate_custom_id(20)
+        hex_form = generate_custom_id()
         enc_filename = "photo_" + hex_form + "." + ext
         enc_filename = secure_filename(enc_filename)
         try:
@@ -1170,7 +1173,7 @@ def updateBlog():
             pass
         ext = photo.filename.lower().split(".")[-1]
         if ext in ["jpg", "png"]:
-            hex_form = generate_custom_id(20)
+            hex_form = generate_custom_id()
             enc_filename = "photo_" + hex_form + "." + ext
             enc_filename = secure_filename(enc_filename)
             try:
@@ -1319,7 +1322,7 @@ def createShopCategory():
 
     if len(valid_fields) == len(createCategory):
         createCategory.update(
-            {"categoryId": generate_custom_id(10), "items": []})
+            {"categoryId": generate_custom_id(), "items": []})
         mongo.db.shopping_menu.insert_one(createCategory)
         return jsonify({
             "message": "Success",
@@ -1346,7 +1349,7 @@ def createShopItem():
                   value in data.items() if field in valid_fields}
 
     if len(valid_fields) == len(createItem):
-        createItem.update({"itemId": generate_custom_id(10)})
+        createItem.update({"itemId": generate_custom_id()})
         mongo.db.shopping_menu.update_one(
             {
                 "categoryId": categoryId
