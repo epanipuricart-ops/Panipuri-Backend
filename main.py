@@ -1232,7 +1232,7 @@ def getCartId():
                              "verify_aud": False
                          })
     email = decoded['email']
-    all_carts =  mongo.db.device_ids.find({"email": email},{"_id": 0})
+    all_carts = mongo.db.device_ids.find({"email": email}, {"_id": 0})
     return jsonify({"result": list(all_carts)})
 
 
@@ -1245,11 +1245,20 @@ def wizardLogin():
     data = mongo.db.device_ids.find_one({'device_id': device_id})
 
     if (email == data['email']):
-        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "franchisee"})
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "franchisee"
+        })
     elif ((email == data['alias_email']) or (email == data['alias_email2'])):
-        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "alias"})
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "alias"
+        })
     else:
         return jsonify({"message": "Authentication Error"}), 401
+
 
 @app.route('/signup/wizard', methods=['POST'])
 @cross_origin()
@@ -1260,11 +1269,20 @@ def wizardSignup():
     data = mongo.db.device_ids.find_one({'device_id': device_id})
 
     if (email == data['email']):
-        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "franchise"})
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "franchise"
+        })
     elif ((email == data['alias_email']) or (email == data['alias_email2'])):
-        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "alias"})
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "alias"
+        })
     else:
         return jsonify({"message": "Authentication Error"}), 401
+
 
 @app.route('/addAliasData', methods=['POST'])
 @cross_origin()
@@ -1276,8 +1294,12 @@ def addAliasData():
     if (len(list(data)) == 2):
         return jsonify({"message": "Cannot Add more data"}), 400
     else:
-        mongo.db.alias_data.insert_one({"device_id": device_id, "alias_email": alias_email, "alias_name": alias_name})
+        mongo.db.alias_data.insert_one({
+            "device_id": device_id,
+            "alias_email": alias_email,
+            "alias_name": alias_name})
         return jsonify({"message": "Succesfully added"})
+
 
 @app.route('/getAliasData', methods=['GET'])
 @cross_origin()
@@ -1290,6 +1312,7 @@ def getAliasData():
         return jsonify({"result": [data]})
     else:
         return jsonify({"result": "No result found"}), 404
+
 
 @app.route('/getMenu', methods=['GET'])
 @cross_origin()
@@ -1396,7 +1419,7 @@ def getItemByCategory():
 
 @app.route('/createShopCategory', methods=['POST'])
 @cross_origin()
-#@verify_token
+# @verify_token
 def createShopCategory():
     data = request.json
     if data is None:
@@ -1418,7 +1441,7 @@ def createShopCategory():
 
 @app.route('/createShopItem', methods=['POST'])
 @cross_origin()
-#@verify_token
+# @verify_token
 def createShopItem():
     data = request.json
     if data is None:
