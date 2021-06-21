@@ -669,7 +669,10 @@ def payuSuccess():
         "device_id": device_id,
         "state": data.get("state"),
         "town": city,
-        "location": data.get("location")
+        "location": data.get("location"),
+        "alias_email1": "",
+        "alias_email2": "",
+        "order_id": order_id
     })
     mongo.db.order_history.insert_one({
         "order_id": order_id,
@@ -1049,6 +1052,19 @@ def getTrackingHistory():
     return jsonify(list(order_history))
 
 
+@app.route('/getOrderById', methods=['GET'])
+@cross_origin()
+@verify_token
+def getOrderById():
+    order_id = request.args.get('order_id')
+    order_status = mongo.db.orders.find_one({
+        "order_id": order_id
+    }, {
+        "_id": 0
+    })
+    return jsonify(order_status)
+
+
 @app.route('/uploadAgreement', methods=['POST'])
 @cross_origin()
 @verify_token
@@ -1205,6 +1221,76 @@ def getClients():
     return jsonify({"clients": list(clients)})
 
 
+@app.route('/getCartId', methods=['GET'])
+@cross_origin()
+@verify_token
+def getCartId():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    all_carts =  mongo.db.device_ids.find({"email": email},{"_id": 0})
+    return jsonify({"result": list(all_carts)})
+
+
+@app.route('/login/wizard', methods=['POST'])
+@cross_origin()
+def wizardLogin():
+    email = request.json['email']
+    device_id = request.json['customerId']
+
+    data = mongo.db.device_ids.find_one({'device_id': device_id})
+
+    if (email == data['email']):
+        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "franchisee"})
+    elif ((email == data['alias_email']) or (email == data['alias_email2'])):
+        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "alias"})
+    else:
+        return jsonify({"message": "Authentication Error"}), 401
+
+@app.route('/signup/wizard', methods=['POST'])
+@cross_origin()
+def wizardSignup():
+    email = request.json['email']
+    device_id = request.json['customerId']
+
+    data = mongo.db.device_ids.find_one({'device_id': device_id})
+
+    if (email == data['email']):
+        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "franchise"})
+    elif ((email == data['alias_email']) or (email == data['alias_email2'])):
+        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "alias"})
+    else:
+        return jsonify({"message": "Authentication Error"}), 401
+
+@app.route('/addAliasData', methods=['POST'])
+@cross_origin()
+def addAliasData():
+    alias_email = request.json['aliasEmail']
+    alias_name = request.json['aliasName']
+    device_id = request.json['customerId']
+    data = mongo.db.alias_data.find({'device_id': device_id}, {"_id": 0})
+    if (len(list(data)) == 2):
+        return jsonify({"message": "Cannot Add more data"}), 400
+    else:
+        mongo.db.alias_data.insert_one({"device_id": device_id, "alias_email": alias_email, "alias_name": alias_name})
+        return jsonify({"message": "Succesfully added"})
+
+@app.route('/getAliasData', methods=['GET'])
+@cross_origin()
+def getAliasData():
+    device_id = request.args.get('customerId')
+    data = mongo.db.alias_data.find_one({'device_id': device_id}, {"_id": 0})
+    print(data)
+    if data:
+        print('debug')
+        return jsonify({"result": [data]})
+    else:
+        return jsonify({"result": "No result found"}), 404
+
 @app.route('/getMenu', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -1310,7 +1396,7 @@ def getItemByCategory():
 
 @app.route('/createShopCategory', methods=['POST'])
 @cross_origin()
-@verify_token
+#@verify_token
 def createShopCategory():
     data = request.json
     if data is None:
@@ -1332,7 +1418,7 @@ def createShopCategory():
 
 @app.route('/createShopItem', methods=['POST'])
 @cross_origin()
-@verify_token
+#@verify_token
 def createShopItem():
     data = request.json
     if data is None:
