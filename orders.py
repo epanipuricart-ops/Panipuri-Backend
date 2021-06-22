@@ -172,6 +172,63 @@ def createMenu(field):
         return jsonify({"message": "Invalid field"}), 400
 
 
+@app.route('/deleteMenu/<field>', methods=['POST'])
+@cross_origin()
+@verify_token
+def deleteMenu(field):
+    data = request.json
+    if data is None:
+        return jsonify({"message": "No JSON data sent"}), 400
+
+    if field == "item":
+        itemId = data.get("itemId")
+        if not itemId:
+            return jsonify({"message": "No Item ID sent"}), 400
+
+        mongo.db.menu.update_one(
+            {
+                "menu.items.itemId": itemId
+            },
+            {
+                "$pull":
+                {
+                    "menu.$.items": {"itemId": itemId}
+                }
+            })
+    elif field == "category":
+        categoryId = data.get("categoryId")
+        if not categoryId:
+            return jsonify({"message": "No Category ID sent"}), 400
+
+        mongo.db.menu.update_one(
+            {
+                "menu.categoryId": categoryId
+            },
+            {
+                "$pull":
+                    {
+                        "menu": {"categoryId": categoryId}
+                    }
+            })
+    else:
+        return jsonify({"message": "Invalid field"}), 400
+    return jsonify({"message": "Sucess"})
+
+
+@app.route('/getAllLocations', methods=['GET'])
+@cross_origin()
+@verify_token
+def getAllLocations():
+    state = request.args.get("state")
+    town = request.args.get("town")
+    if state and town:
+        locations = mongo.db.device_ids.find(
+            {"state": state, "town": town},
+            {"_id": 0, "location": 1, "device_id": 1})
+        return jsonify({"locations": list(locations)})
+    return jsonify({"message": "No State/City provided"}), 400
+
+
 if __name__ == "__main__":
     print("starting...")
     app.run(host=cfg.OrderFlask['HOST'],
