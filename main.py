@@ -276,7 +276,10 @@ def sendOTP():
     typeOfMessage = 1
     if 'phone' in request.json:
         phone = request.json['phone']
-        data = {"message": msg, "phone": phone, "type": typeOfMessage}
+        #email = request.json['email']
+        email = 'jyotimay16@gmail.com'
+        name = request.json['firstName']
+        data = {"message": msg, "phone": phone, "name": name,"email": email,"type": typeOfMessage}
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -1283,11 +1286,10 @@ def addAliasData():
 @cross_origin()
 def getAliasData():
     device_id = request.args.get('customerId')
-    data = mongo.db.alias_data.find_one({'device_id': device_id}, {"_id": 0})
-    print(data)
+    data = mongo.db.alias_data.find({'device_id': device_id}, {"_id": 0})
     if data:
         print('debug')
-        return jsonify({"result": [data]})
+        return jsonify({"result": list(data)})
     else:
         return jsonify({"result": "No result found"}), 404
 
