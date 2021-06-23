@@ -112,7 +112,8 @@ def register(path):
             "firstName": firstName,
             "lastName": lastName,
             "firebase_id": firebase_id,
-            "roles": ['subscriber', 'customer']
+            "roles": ['subscriber', 'customer'],
+            "exportedZoho": False
         }
         try:
             mongo.db.clients.insert_one(doc)
@@ -146,7 +147,8 @@ def register(path):
             "title": title,
             "lastName": lastName,
             "firebase_id": firebase_id,
-            "roles": ['customer']
+            "roles": ['customer'],
+            "exportedZoho": False
         }
         try:
             mongo.db.clients.insert_one(doc)
@@ -158,7 +160,7 @@ def register(path):
                 "mobile": doc['mobile'],
                 "roles": doc['roles']
             })
-        except:
+        except Exception:
             return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -1100,6 +1102,8 @@ def uploadAgreement():
 def subscribeNewsletter():
     emailID = request.form.get('email')
     if emailID:
+        if mongo.db.newsletter.find_one({"email": emailID}):
+            return jsonify({"message": "EMail already subscribed"})
         mongo.db.newsletter.insert_one({"email": emailID})
         return jsonify({"message": "Success"})
     return jsonify({"message": "No email provided"}), 400
@@ -1470,6 +1474,47 @@ def createShopItem():
     return jsonify({"message": "Missing fields while creating item"}), 400
 
 
+@scheduler.task('cron', id='send_to_zoho', minute=0, hour=0)
+def send_data_to_zoho():
+    newClients = mongo.db.clients.find({"exportedZoho": False})
+    processedIds = []
+    zoho_records = []
+    for client in newClients:
+        zoho_records.append({
+            "First_Name": client.get("firstName"),
+            "Last_Name": client.get("lastName"),
+            "Email": client.get("email"),
+            "Phone": client.get("mobile")
+        })
+        processedIds.append(client["_id"])
+    if not zoho_records:
+        return
+    mongo.db.clients.update_many({
+        "_id": {"$in": processedIds}
+    }, {"$set": {"exportedZoho": True}})
+    refresh_token_url = "https://accounts.zoho.in/oauth/v2/token"
+    response = requests.post(
+        refresh_token_url,
+        data={
+            "refresh_token": cfg.ZohoConfig["refresh_token"],
+            "client_id": cfg.ZohoConfig["client_id"],
+            "client_secret": cfg.ZohoConfig["client_secret"],
+            "grant_type": "refresh_token"
+        }).json()
+    access_token = response["access_token"]
+    contacts = "https://www.zohoapis.in/crm/v2/Contacts"
+    header = {"Authorization": "Zoho-oauthtoken "+access_token}
+    data = {
+        "data": zoho_records,
+        "trigger": [
+            "approval",
+            "workflow",
+            "blueprint"
+        ]
+    }
+    requests.post(contacts, headers=header, json=data)
+
+
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
 def move_agreement_pdf():
     source_dir = 'public/agreement_pdf'
@@ -1483,6 +1528,7 @@ def move_agreement_pdf():
 
 if __name__ == "__main__":
     print("starting...")
+    send_data_to_zoho()
     app.run(host=cfg.Flask['HOST'],
             port=cfg.Flask['PORT'],
             threaded=cfg.Flask['THREADED'],
