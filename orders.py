@@ -1,6 +1,7 @@
 from flask import (Flask, request, jsonify)
 from flask_pymongo import PyMongo
 from flask_cors import CORS, cross_origin
+from flask_socketio import SocketIO, emit
 from firebase_admin import credentials, auth
 import pyrebase
 import json
@@ -18,6 +19,7 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
+socketio = SocketIO(app)
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
@@ -229,9 +231,48 @@ def getAllLocations():
     return jsonify({"message": "No State/City provided"}), 400
 
 
+@socketio.on('makeOrder')
+def handle_json(json):
+    # print('received json: ' + str(json))
+    track_id = generate_custom_id()
+    mongo.db.make_orders.insert_one(
+        {
+            "track_id":track_id,
+            "items":json["items"],
+            "cartId":json["cartId"]
+        })
+    data = mongo.db.menu.aggregate(
+        [
+            {
+                "$match":
+                {"cartId": json["cartId"]}
+            },
+            {"$unwind": "$menu"},
+            {
+                "$match":
+                {"menu.items.itemId": {"$in": json["items"]}}
+            },
+            {"$unwind": "$menu.items"},
+            {
+                "$match":
+                {"menu.items.itemId": {"$in": json["items"]}}
+            },
+            {
+                "$group":
+                {
+                    "_id": track_id,
+                    "totalPrice": {"$sum": "$menu.items.price"}}
+            }
+        ])
+    data = list(data)
+    # print(data)
+    emit("message", data, json=True)
+
+
 if __name__ == "__main__":
     print("starting...")
-    app.run(host=cfg.OrderFlask['HOST'],
-            port=cfg.OrderFlask['PORT'],
-            threaded=cfg.OrderFlask['THREADED'],
-            debug=True)
+    socketio.run(app,
+                 host=cfg.OrderFlask['HOST'],
+                 port=cfg.OrderFlask['PORT'],
+                 threaded=cfg.OrderFlask['THREADED'],
+                 debug=True)
