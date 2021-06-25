@@ -3,6 +3,7 @@ from flask_pymongo import PyMongo
 from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, emit
 from firebase_admin import credentials, auth
+import firebase_admin
 import pyrebase
 import json
 import time
@@ -102,7 +103,7 @@ def updateMenu(field):
     elif field == "cart":
         if not data.get("cartId"):
             return jsonify({"message": "No Cart ID sent"}), 400
-        valid_fields = ["isActive"]
+        valid_fields = ["deliveryCharge", "flatDiscount", "gst", "isActive"]
         updateCart = {field: value for field,
                       value in data.items() if field in valid_fields}
         mongo.db.menu.update_one(
@@ -231,42 +232,120 @@ def getAllLocations():
     return jsonify({"message": "No State/City provided"}), 400
 
 
-@socketio.on('makeOrder')
-def handle_json(json):
-    # print('received json: ' + str(json))
-    track_id = generate_custom_id()
-    mongo.db.make_orders.insert_one(
-        {
-            "track_id":track_id,
-            "items":json["items"],
-            "cartId":json["cartId"]
-        })
-    data = mongo.db.menu.aggregate(
-        [
-            {
-                "$match":
-                {"cartId": json["cartId"]}
-            },
-            {"$unwind": "$menu"},
-            {
-                "$match":
-                {"menu.items.itemId": {"$in": json["items"]}}
-            },
-            {"$unwind": "$menu.items"},
-            {
-                "$match":
-                {"menu.items.itemId": {"$in": json["items"]}}
-            },
-            {
-                "$group":
+@app.route('/orderStatus', methods=['GET'])
+@cross_origin()
+@verify_token
+def orderStatus():
+    orderId = request.args.get("orderId")
+    if orderId:
+        order = mongo.db.online_orders.find_one(
+            {"orderId": orderId}, {"_id": 0})
+        return jsonify(order)
+    return jsonify({"message": "No orderId Sent"}), 400
+
+
+@socketio.on('placeOrder')
+def placeOrderEvent(data):
+    valid_fields = [
+        "cartId",
+        "customerName",
+        "customerPhone",
+        "customerEmail",
+        "deliveryAddress",
+        "orderType",
+        "items",
+        "modeOfPayment",
+        "transactionId"]
+    if "orderType" not in data:
+        data["orderType"] = "delivery"
+    if "transactionId" not in data:
+        data["transactionId"] = ""
+    createOrder = {field: value for field,
+                   value in data.items() if field in valid_fields}
+    if not isinstance(data.get("items"), list):
+        emit("placeOrder", {"message": "Invalid items sent"}, json=True)
+        return
+    if len(createOrder) == len(valid_fields):
+        data = mongo.db.menu.aggregate(
+            [
                 {
-                    "_id": track_id,
-                    "totalPrice": {"$sum": "$menu.items.price"}}
-            }
-        ])
-    data = list(data)
-    # print(data)
-    emit("message", data, json=True)
+                    "$match":
+                    {"cartId": json["cartId"]}
+                },
+                {"$unwind": "$menu"},
+                {
+                    "$match":
+                    {
+                        "menu.items.itemId": {"$in": json["items"]}
+                    }
+                },
+                {"$unwind": "$menu.items"},
+                {
+                    "$match":
+                    {"menu.items.itemId": {"$in": json["items"]}}
+                },
+                {
+                    "$group":
+                    {
+                        "_id": None,
+                        "subTotal": {"$sum": "$menu.items.price"},
+                        "gst": {"$first": "$gst"}
+                    }
+                }
+            ])
+        data = list(data)[0]
+        orderFields = {
+            "orderId": generate_custom_id(),
+            "timestamp": int(round(time.time() * 1000)),
+            "orderStatus": "placed",
+            "subTotal": data["subTotal"],
+            "gst": data["gst"],
+            "total": (1+data["gst"]/100)*data["subTotal"]
+        }
+        createOrder.update(orderFields)
+        mongo.db.online_orders.insert_one(createOrder)
+        emit("message", createOrder, json=True)
+        return
+    emit("placeOrder", {
+         "message": "Missing fields while creating order"}, json=True)
+
+
+@socketio.on("receiveOrder")
+def receiveOrderEvent(data):
+    cartId = data.get("cartId")
+    if cartId:
+        newOrders = mongo.db.online_orders.find(
+            {"cartId": cartId, "orderStatus": "placed"},
+            {"_id": 0})
+        emit("receiveOrder", {"orders": list(newOrders)}, json=True)
+        return
+    emit("receiveOrder", {"message": "No cartId sent"})
+
+
+@socketio.on("updateStatus")
+def updateStatusEvent(data):
+    orderId = data.get("orderId")
+    status = data.get("status")
+    if orderId and status:
+        mongo.db.online_orders.update_one(
+            {"orderId": orderId},
+            {"$set": {
+                "orderStatus": status
+            }})
+        emit("updateStatus", {"message": "Success"}, json=True)
+        return
+    emit("updateStatus", {"message": "Missing fields"}, json=True)
+
+
+@socketio.on("allOrderStatus")
+def allOrderStatusEvent(data):
+    clientEmail = data.get("clientEmail")
+    if clientEmail:
+        orders = mongo.db.online_orders.find(
+            {"customerEmail": clientEmail}, {"_id": 0})
+        emit("allOrderStatus", {"orders": list(orders)}, json=True)
+        return
+    emit("allOrderStatus", {"message": "No clientEmail sent"})
 
 
 if __name__ == "__main__":
