@@ -276,8 +276,8 @@ def sendOTP():
     typeOfMessage = 1
     if 'phone' in request.json:
         phone = request.json['phone']
-        #email = request.json['email']
-        email = 'jyotimay16@gmail.com'
+        email = request.json['email']
+        #email = 'jyotimay16@gmail.com'
         name = request.json['firstName']
         data = {"message": msg, "phone": phone, "name": name,"email": email,"type": typeOfMessage}
         headers = {
@@ -1101,7 +1101,7 @@ def uploadAgreement():
 @app.route('/subscribeNewsletter', methods=['POST'])
 @cross_origin()
 def subscribeNewsletter():
-    emailID = request.form.get('email')
+    emailID = request.json.get('email')
     if emailID:
         mongo.db.newsletter.insert_one({"email": emailID})
         return jsonify({"message": "Success"})
@@ -1249,7 +1249,7 @@ def wizardLogin():
 
     if (email == data['email']):
         return jsonify({"message": "Successful Login", "customerId": device_id, "role": "franchisee"})
-    elif ((email == data['alias_email']) or (email == data['alias_email2'])):
+    elif ((email == data['alias_email1']) or (email == data['alias_email2'])):
         return jsonify({"message": "Successful Login", "customerId": device_id, "role": "alias"})
     else:
         return jsonify({"message": "Authentication Error"}), 401
