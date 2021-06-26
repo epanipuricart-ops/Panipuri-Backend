@@ -112,7 +112,8 @@ def register(path):
             "firstName": firstName,
             "lastName": lastName,
             "firebase_id": firebase_id,
-            "roles": ['subscriber', 'customer']
+            "roles": ['subscriber', 'customer'],
+            "exportedZoho": False
         }
         try:
             mongo.db.clients.insert_one(doc)
@@ -146,7 +147,8 @@ def register(path):
             "title": title,
             "lastName": lastName,
             "firebase_id": firebase_id,
-            "roles": ['customer']
+            "roles": ['customer'],
+            "exportedZoho": False
         }
         try:
             mongo.db.clients.insert_one(doc)
@@ -158,7 +160,7 @@ def register(path):
                 "mobile": doc['mobile'],
                 "roles": doc['roles']
             })
-        except:
+        except Exception:
             return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -1103,6 +1105,8 @@ def uploadAgreement():
 def subscribeNewsletter():
     emailID = request.json.get('email')
     if emailID:
+        if mongo.db.newsletter.find_one({"email": emailID}):
+            return jsonify({"message": "EMail already subscribed"})
         mongo.db.newsletter.insert_one({"email": emailID})
         return jsonify({"message": "Success"})
     return jsonify({"message": "No email provided"}), 400
@@ -1235,7 +1239,7 @@ def getCartId():
                              "verify_aud": False
                          })
     email = decoded['email']
-    all_carts =  mongo.db.device_ids.find({"email": email},{"_id": 0})
+    all_carts = mongo.db.device_ids.find({"email": email}, {"_id": 0})
     return jsonify({"result": list(all_carts)})
 
 
@@ -1254,6 +1258,7 @@ def wizardLogin():
     else:
         return jsonify({"message": "Authentication Error"}), 401
 
+
 @app.route('/signup/wizard', methods=['POST'])
 @cross_origin()
 def wizardSignup():
@@ -1263,11 +1268,20 @@ def wizardSignup():
     data = mongo.db.device_ids.find_one({'device_id': device_id})
 
     if (email == data['email']):
-        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "franchise"})
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "franchise"
+        })
     elif ((email == data['alias_email']) or (email == data['alias_email2'])):
-        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "alias"})
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "alias"
+        })
     else:
         return jsonify({"message": "Authentication Error"}), 401
+
 
 @app.route('/addAliasData', methods=['POST'])
 @cross_origin()
@@ -1279,8 +1293,12 @@ def addAliasData():
     if (len(list(data)) == 2):
         return jsonify({"message": "Cannot Add more data"}), 400
     else:
-        mongo.db.alias_data.insert_one({"device_id": device_id, "alias_email": alias_email, "alias_name": alias_name})
+        mongo.db.alias_data.insert_one({
+            "device_id": device_id,
+            "alias_email": alias_email,
+            "alias_name": alias_name})
         return jsonify({"message": "Succesfully added"})
+
 
 @app.route('/getAliasData', methods=['GET'])
 @cross_origin()
@@ -1292,6 +1310,7 @@ def getAliasData():
         return jsonify({"result": list(data)})
     else:
         return jsonify({"result": "No result found"}), 404
+
 
 @app.route('/getMenu', methods=['GET'])
 @cross_origin()
@@ -1398,7 +1417,7 @@ def getItemByCategory():
 
 @app.route('/createShopCategory', methods=['POST'])
 @cross_origin()
-#@verify_token
+# @verify_token
 def createShopCategory():
     data = request.json
     if data is None:
@@ -1420,7 +1439,7 @@ def createShopCategory():
 
 @app.route('/createShopItem', methods=['POST'])
 @cross_origin()
-#@verify_token
+# @verify_token
 def createShopItem():
     data = request.json
     if data is None:
@@ -1449,6 +1468,47 @@ def createShopItem():
     return jsonify({"message": "Missing fields while creating item"}), 400
 
 
+@scheduler.task('cron', id='send_to_zoho', minute=0, hour=0)
+def send_data_to_zoho():
+    newClients = mongo.db.clients.find({"exportedZoho": False})
+    processedIds = []
+    zoho_records = []
+    for client in newClients:
+        zoho_records.append({
+            "First_Name": client.get("firstName"),
+            "Last_Name": client.get("lastName"),
+            "Email": client.get("email"),
+            "Phone": client.get("mobile")
+        })
+        processedIds.append(client["_id"])
+    if not zoho_records:
+        return
+    mongo.db.clients.update_many({
+        "_id": {"$in": processedIds}
+    }, {"$set": {"exportedZoho": True}})
+    refresh_token_url = "https://accounts.zoho.in/oauth/v2/token"
+    response = requests.post(
+        refresh_token_url,
+        data={
+            "refresh_token": cfg.ZohoConfig["refresh_token"],
+            "client_id": cfg.ZohoConfig["client_id"],
+            "client_secret": cfg.ZohoConfig["client_secret"],
+            "grant_type": "refresh_token"
+        }).json()
+    access_token = response["access_token"]
+    contacts = "https://www.zohoapis.in/crm/v2/Contacts"
+    header = {"Authorization": "Zoho-oauthtoken "+access_token}
+    data = {
+        "data": zoho_records,
+        "trigger": [
+            "approval",
+            "workflow",
+            "blueprint"
+        ]
+    }
+    requests.post(contacts, headers=header, json=data)
+
+
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
 def move_agreement_pdf():
     source_dir = 'public/agreement_pdf'
@@ -1462,6 +1522,7 @@ def move_agreement_pdf():
 
 if __name__ == "__main__":
     print("starting...")
+    send_data_to_zoho()
     app.run(host=cfg.Flask['HOST'],
             port=cfg.Flask['PORT'],
             threaded=cfg.Flask['THREADED'],
