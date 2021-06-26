@@ -278,7 +278,10 @@ def sendOTP():
     typeOfMessage = 1
     if 'phone' in request.json:
         phone = request.json['phone']
-        data = {"message": msg, "phone": phone, "type": typeOfMessage}
+        email = request.json['email']
+        #email = 'jyotimay16@gmail.com'
+        name = request.json['firstName']
+        data = {"message": msg, "phone": phone, "name": name,"email": email,"type": typeOfMessage}
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -1100,7 +1103,7 @@ def uploadAgreement():
 @app.route('/subscribeNewsletter', methods=['POST'])
 @cross_origin()
 def subscribeNewsletter():
-    emailID = request.form.get('email')
+    emailID = request.json.get('email')
     if emailID:
         if mongo.db.newsletter.find_one({"email": emailID}):
             return jsonify({"message": "EMail already subscribed"})
@@ -1249,17 +1252,9 @@ def wizardLogin():
     data = mongo.db.device_ids.find_one({'device_id': device_id})
 
     if (email == data['email']):
-        return jsonify({
-            "message": "Successful Login",
-            "customerId": device_id,
-            "role": "franchisee"
-        })
-    elif ((email == data['alias_email']) or (email == data['alias_email2'])):
-        return jsonify({
-            "message": "Successful Login",
-            "customerId": device_id,
-            "role": "alias"
-        })
+        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "franchisee"})
+    elif ((email == data['alias_email1']) or (email == data['alias_email2'])):
+        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "alias"})
     else:
         return jsonify({"message": "Authentication Error"}), 401
 
@@ -1309,11 +1304,10 @@ def addAliasData():
 @cross_origin()
 def getAliasData():
     device_id = request.args.get('customerId')
-    data = mongo.db.alias_data.find_one({'device_id': device_id}, {"_id": 0})
-    print(data)
+    data = mongo.db.alias_data.find({'device_id': device_id}, {"_id": 0})
     if data:
         print('debug')
-        return jsonify({"result": [data]})
+        return jsonify({"result": list(data)})
     else:
         return jsonify({"result": "No result found"}), 404
 
