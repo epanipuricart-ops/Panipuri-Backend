@@ -57,7 +57,7 @@ def getMenu():
     cartId = request.args.get("cartId")
     if not cartId:
         return jsonify({"message": "No Cart ID sent"}), 400
-    cart = mongo.db.menu.find_one({"cartId": cartId}, {"_id": 0})
+    cart = mongo.db.menu.find_one({"cartId": cartId}, {"_id": 0, "sid": 0})
     return jsonify(cart or {})
 
 
@@ -300,6 +300,13 @@ def getShoppingItemById():
     return jsonify({"message": "No such Item Found"})
 
 
+@socketio.on("registerSid")
+def registerSidEvent(data):
+    cartId = data.get("cartId")
+    if cartId:
+        mongo.db.menu.update_one({"cartId": cartId}, {
+                                 "$set": {"sid": request.sid}})
+
 @socketio.on('placeOrder')
 def placeOrderEvent(data):
     valid_fields = [
@@ -345,7 +352,8 @@ def placeOrderEvent(data):
                     {
                         "_id": None,
                         "subTotal": {"$sum": "$menu.items.price"},
-                        "gst": {"$first": "$gst"}
+                        "gst": {"$first": "$gst"},
+                        "sid": {"$first": "$sid"}
                     }
                 }
             ])
@@ -360,22 +368,23 @@ def placeOrderEvent(data):
         }
         createOrder.update(orderFields)
         mongo.db.online_orders.insert_one(createOrder)
-        emit("message", createOrder, json=True)
+        emit("placeOrder", createOrder, json=True)
+        emit("receiveOrder", createOrder, json=True, room=data["sid"])
         return
     emit("placeOrder", {
          "message": "Missing fields while creating order"}, json=True)
 
 
-@socketio.on("receiveOrder")
-def receiveOrderEvent(data):
-    cartId = data.get("cartId")
-    if cartId:
-        newOrders = mongo.db.online_orders.find(
-            {"cartId": cartId, "orderStatus": "placed"},
-            {"_id": 0})
-        emit("receiveOrder", {"orders": list(newOrders)}, json=True)
-        return
-    emit("receiveOrder", {"message": "No cartId sent"})
+# @socketio.on("receiveOrder")
+# def receiveOrderEvent(data):
+#     cartId = data.get("cartId")
+#     if cartId:
+#         newOrders = mongo.db.online_orders.find(
+#             {"cartId": cartId, "orderStatus": "placed"},
+#             {"_id": 0})
+#         emit("receiveOrder", {"orders": list(newOrders)}, json=True)
+#         return
+#     emit("receiveOrder", {"message": "No cartId sent"})
 
 
 @socketio.on("updateStatus")

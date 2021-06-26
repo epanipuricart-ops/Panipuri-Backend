@@ -1319,7 +1319,7 @@ def getMenu():
     cartId = request.args.get("cartId")
     if not cartId:
         return jsonify({"message": "No Cart ID sent"}), 400
-    cart = mongo.db.menu.find_one({"cartId": cartId}, {"_id": 0})
+    cart = mongo.db.menu.find_one({"cartId": cartId}, {"_id": 0, "sid": 0})
     return jsonify(cart or {})
 
 
