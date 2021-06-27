@@ -281,7 +281,8 @@ def sendOTP():
         email = request.json['email']
         #email = 'jyotimay16@gmail.com'
         name = request.json['firstName']
-        data = {"message": msg, "phone": phone, "name": name,"email": email,"type": typeOfMessage}
+        data = {"message": msg, "phone": phone, "name": name,
+                "email": email, "type": typeOfMessage}
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -1466,6 +1467,61 @@ def createShopItem():
             })
         return jsonify({"message": "Success"})
     return jsonify({"message": "Missing fields while creating item"}), 400
+
+
+@app.route('/addToCartShoppingCart', methods=['POST'])
+@cross_origin()
+@verify_token
+def addToCartShoppingCart():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    items = request.json.get("items")
+    if isinstance(items, list):
+        mongo.db.shopping_cart.update_one(
+            {"email": email},
+            {"$set": {"items": items}},
+            upsert=True)
+        return jsonify({"message": "Success"})
+    return jsonify({"message": "Invalid items sent"}), 400
+
+
+@app.route('/getShoppingCart', methods=['GET'])
+@cross_origin()
+@verify_token
+def getShoppingCart():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    cart = mongo.db.shopping_cart.find_one({"email": email})
+    return jsonify(cart)
+
+
+@app.route('/getShoppingItemById', methods=['GET'])
+@cross_origin()
+@verify_token
+def getShoppingItemById():
+    itemId = request.args.get("itemId")
+    if not itemId:
+        return jsonify({"message": "No Item ID sent"})
+    itemDetail = mongo.db.shopping_menu.aggregate(
+        [
+            {"$match": {"items.itemId": itemId}},
+            {"$unwind": "$items"},
+            {"$match": {"items.itemId": itemId}}
+        ])
+    itemDetail = list(itemDetail)
+    if itemDetail:
+        return jsonify(itemDetail[0]["items"])
+    return jsonify({"message": "No such Item Found"})
 
 
 @scheduler.task('cron', id='send_to_zoho', minute=0, hour=0)
