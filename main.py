@@ -21,6 +21,7 @@ import requests
 import json
 import random
 import shutil
+import re
 
 UPLOAD_FOLDER = 'public/img'
 AGREEMENT_PDF_FOLDER = 'public/agreement_pdf'
@@ -71,12 +72,13 @@ def allowed_file(filename):
 
 
 def get_last_id(city):
-    data = mongo.db.city_wise_count.find_one_and_update({},
-                                                        {"$inc": {
-                                                            city: 1
-                                                        }})
+    data = mongo.db.city_wise_count.find_one_and_update(
+        {"city": re.compile(city, re.IGNORECASE)},
+        {"$inc": {
+            "value": 1
+        }})
     if data:
-        new_id = "epanipuricart." + city + "." + str(data[city])
+        new_id = "epanipuricart." + city + "." + str(data["value"])
     else:
         new_id = "epanipuricart.dummy.5"
     return new_id
@@ -1367,7 +1369,8 @@ def getAllLocations():
     town = request.args.get("town")
     if state and town:
         locations = mongo.db.device_ids.find(
-            {"state": state, "town": town},
+            {"state": re.compile(state, re.IGNORECASE),
+             "town": re.compile(town, re.IGNORECASE)},
             {"_id": 0, "location": 1, "device_id": 1})
         return jsonify({"locations": list(locations)})
     return jsonify({"message": "No State/City provided"}), 400
@@ -1446,7 +1449,7 @@ def createShopItem():
     return jsonify({"message": "Missing fields while creating item"}), 400
 
 
-@app.route('/addToCartShoppingCart', methods=['POST'])
+@app.route('/addToShoppingCart', methods=['POST'])
 @cross_origin()
 @verify_token
 def addToCartShoppingCart():
@@ -1457,14 +1460,15 @@ def addToCartShoppingCart():
                              "verify_aud": False
                          })
     email = decoded['email']
-    items = request.json.get("items")
-    if isinstance(items, list):
-        mongo.db.shopping_cart.update_one(
-            {"email": email},
-            {"$set": {"items": items}},
-            upsert=True)
-        return jsonify({"message": "Success"})
-    return jsonify({"message": "Invalid items sent"}), 400
+    itemId = request.json.get("itemId")
+    qty = request.json.get("qty", 1)
+    mongo.db.shopping_cart.update_one(
+        {"email": email},
+        {"$push": {
+            "items": {"itemId": itemId, "qty": qty}
+        }},
+        upsert=True)
+    return jsonify({"message": "Success"})
 
 
 @app.route('/getShoppingCart', methods=['GET'])
@@ -1478,7 +1482,7 @@ def getShoppingCart():
                              "verify_aud": False
                          })
     email = decoded['email']
-    cart = mongo.db.shopping_cart.find_one({"email": email},{"_id": 0})
+    cart = mongo.db.shopping_cart.find_one({"email": email}, {"_id": 0})
     return jsonify(cart)
 
 
