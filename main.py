@@ -91,7 +91,7 @@ def generate_custom_id():
     )
 
 
-@app.route('/register/<path:path>', methods=['POST'])
+@app.route('/franchisee/register/<path:path>', methods=['POST'])
 @cross_origin()
 def register(path):
     token = request.headers['Authorization']
@@ -166,7 +166,7 @@ def register(path):
             return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/login/<path:path>', methods=['POST'])
+@app.route('/franchisee/login/<path:path>', methods=['POST'])
 @cross_origin()
 @verify_token
 def login(path):
@@ -248,7 +248,7 @@ def login(path):
             return jsonify({"message": "User not registered"}), 401
 
 
-@app.route('/getProfile', methods=['GET'])
+@app.route('/franchisee/getProfile', methods=['GET'])
 @cross_origin()
 @verify_token
 def getProfile():
@@ -273,7 +273,7 @@ def getProfile():
         return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/sendOTP', methods=['POST'])
+@app.route('/franchisee/sendOTP', methods=['POST'])
 @cross_origin()
 def sendOTP():
     msg = "__OTP__ is your One Time Password for phone verification"
@@ -307,7 +307,7 @@ def sendOTP():
         return jsonify({"message": "Missing Parameters"}), 400
 
 
-@app.route('/verifyOTP', methods=['POST'])
+@app.route('/franchisee/verifyOTP', methods=['POST'])
 @cross_origin()
 def verifyOTP():
     if ('phone' in request.json) and ('token'
@@ -332,7 +332,7 @@ def verifyOTP():
         return jsonify({"message": "Missing Parameters"}), 400
 
 
-@app.route('/resendOTP', methods=['POST'])
+@app.route('/franchisee/resendOTP', methods=['POST'])
 @cross_origin()
 def reSendOTP():
     msg = "__OTP__ is your One Time Password for phone verification"
@@ -358,7 +358,7 @@ def reSendOTP():
         return jsonify({"message": "Missing Parameters"}), 400
 
 
-@app.route('/saveGeneralInformation', methods=['POST'])
+@app.route('/franchisee/saveGeneralInformation', methods=['POST'])
 @cross_origin()
 @verify_token
 def saveGeneralForm():
@@ -480,7 +480,7 @@ def saveGeneralForm():
             return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/getGeneralInformation', methods=['GET'])
+@app.route('/franchisee/getGeneralInformation', methods=['GET'])
 @cross_origin()
 @verify_token
 def getGeneralInformation():
@@ -505,7 +505,7 @@ def getGeneralInformation():
         return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/getCosting', methods=['GET'])
+@app.route('/franchisee/getCosting', methods=['GET'])
 @cross_origin()
 @verify_token
 def getCosting():
@@ -527,7 +527,7 @@ def getCosting():
         return jsonify({"message": "Some Error Occurred"}), 500
 
 
-@app.route('/updateCosting', methods=['POST'])
+@app.route('/franchisee/updateCosting', methods=['POST'])
 @cross_origin()
 @verify_token
 def updateCosting():
@@ -551,7 +551,7 @@ def updateCosting():
         return jsonify({"message": "Some Error Occurred"}), 500
 
 
-@app.route('/payNow', methods=['POST'])
+@app.route('/franchisee/payNow', methods=['POST'])
 @cross_origin()
 @verify_token
 def payNow():
@@ -623,7 +623,7 @@ def payNow():
     return res
 
 
-@app.route('/checkPaymentStatus', methods=['POST'])
+@app.route('/franchisee/checkPaymentStatus', methods=['POST'])
 @cross_origin()
 @verify_token
 def checkPaymentStatus():
@@ -633,7 +633,7 @@ def checkPaymentStatus():
     return jsonify({"payment_status": payment_status})
 
 
-@app.route('/payuSuccess', methods=['POST'])
+@app.route('/franchisee/payuSuccess', methods=['POST'])
 @cross_origin()
 def payuSuccess():
     date = int(round(time.time() * 1000))
@@ -701,7 +701,7 @@ def payuSuccess():
     return render_template('index.html')
 
 
-@app.route('/payuFailure', methods=['POST'])
+@app.route('/franchisee/payuFailure', methods=['POST'])
 @cross_origin()
 def payuFailure():
     transaction_id = request.form['txnid']
@@ -712,20 +712,20 @@ def payuFailure():
     return render_template('fail.html')
 
 
-@app.route('/getPrescription', methods=['GET'])
+@app.route('/franchisee/getPrescription', methods=['GET'])
 @cross_origin()
 def prescription():
     return render_template('prescription.html')
 
 
-@app.route('/getModelImage/<path:path>', methods=['GET'])
+@app.route('/franchisee/getModelImage/<path:path>', methods=['GET'])
 @cross_origin()
 @verify_token
 def getModelImage(path):
     return send_from_directory('public/model-images', path)
 
 
-@app.route('/getAgreementData', methods=['GET'])
+@app.route('/franchisee/getAgreementData', methods=['GET'])
 @cross_origin()
 @verify_token
 def getAgreementData():
@@ -755,7 +755,7 @@ def getAgreementData():
     })
 
 
-@app.route('/getLatestOrder', methods=['GET'])
+@app.route('/franchisee/getLatestOrder', methods=['GET'])
 @cross_origin()
 @verify_token
 def getLatestOrder():
@@ -777,7 +777,7 @@ def getLatestOrder():
         return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/getAllOrders', methods=['GET'])
+@app.route('/franchisee/getAllOrders', methods=['GET'])
 @cross_origin()
 @verify_token
 def getAllOrders():
@@ -819,7 +819,7 @@ def getAllOrders():
         return jsonify({"message": "Some error occurred"}), 500'''
 
 
-@app.route('/uploadDocuments', methods=['POST'])
+@app.route('/franchisee/uploadDocuments', methods=['POST'])
 @cross_origin()
 @verify_token
 def uploadDocuments():
@@ -961,7 +961,7 @@ def uploadDocuments():
             return jsonify({"message": "Service Error"}), 423
 
 
-@app.route('/getMOU', methods=['GET', 'POST'])
+@app.route('/franchisee/getMOU', methods=['GET', 'POST'])
 @cross_origin()
 @verify_token
 def getMOU():
@@ -1002,7 +1002,7 @@ def saveFigures():
     return jsonify({"message": "Success"})
 
 
-@app.route('/updateOrder', methods=['POST'])
+@app.route('/franchisee/updateOrder', methods=['POST'])
 @cross_origin()
 @verify_token
 def updateOrder():
@@ -1028,7 +1028,7 @@ def updateOrder():
         return jsonify({"message": "Some Error Occurred"}), 500
 
 
-@app.route('/getPersonalOrders', methods=['GET'])
+@app.route('/franchisee/getPersonalOrders', methods=['GET'])
 @cross_origin()
 @verify_token
 def getPersonalOrders():
@@ -1045,7 +1045,7 @@ def getPersonalOrders():
     return jsonify(list(orders_list))
 
 
-@app.route('/getTrackingHistory', methods=['GET'])
+@app.route('/franchisee/getTrackingHistory', methods=['GET'])
 @cross_origin()
 @verify_token
 def getTrackingHistory():
@@ -1058,7 +1058,7 @@ def getTrackingHistory():
     return jsonify(list(order_history))
 
 
-@app.route('/getOrderById', methods=['GET'])
+@app.route('/franchisee/getOrderById', methods=['GET'])
 @cross_origin()
 @verify_token
 def getOrderById():
@@ -1071,7 +1071,7 @@ def getOrderById():
     return jsonify(order_status)
 
 
-@app.route('/uploadAgreement', methods=['POST'])
+@app.route('/franchisee/uploadAgreement', methods=['POST'])
 @cross_origin()
 @verify_token
 def uploadAgreement():
@@ -1101,7 +1101,7 @@ def uploadAgreement():
     return jsonify({"message": "Only PDF files allowed"}), 400
 
 
-@app.route('/subscribeNewsletter', methods=['POST'])
+@app.route('/franchisee/subscribeNewsletter', methods=['POST'])
 @cross_origin()
 def subscribeNewsletter():
     emailID = request.json.get('email')
@@ -1113,7 +1113,7 @@ def subscribeNewsletter():
     return jsonify({"message": "No email provided"}), 400
 
 
-@app.route('/saveBlog', methods=['POST'])
+@app.route('/franchisee/saveBlog', methods=['POST'])
 @cross_origin()
 @verify_token
 def saveBlog():
@@ -1144,20 +1144,20 @@ def saveBlog():
     return jsonify({"message": "Only JPG/PNG files allowed"}), 400
 
 
-@app.route('/getAllBlogs', methods=['GET'])
+@app.route('/franchisee/getAllBlogs', methods=['GET'])
 @cross_origin()
 def getAllBlogs():
     blogs_list = mongo.db.blogs.find({}, {"_id": 0})
     return jsonify({"blogs": list(blogs_list)})
 
 
-@app.route('/getBlogImage/<path:path>', methods=['GET'])
+@app.route('/franchisee/getBlogImage/<path:path>', methods=['GET'])
 @cross_origin()
 def getBlogImage(path):
     return send_from_directory('public/blog', path)
 
 
-@app.route('/deleteBlog', methods=['POST'])
+@app.route('/franchisee/deleteBlog', methods=['POST'])
 @cross_origin()
 @verify_token
 def deleteBlog():
@@ -1173,7 +1173,7 @@ def deleteBlog():
     return jsonify({"message": "Success"})
 
 
-@app.route('/updateBlog', methods=['POST'])
+@app.route('/franchisee/updateBlog', methods=['POST'])
 @cross_origin()
 @verify_token
 def updateBlog():
@@ -1218,7 +1218,7 @@ def updateBlog():
     return jsonify({"message": "Success"})
 
 
-@app.route('/getClients', methods=['GET'])
+@app.route('/franchisee/getClients', methods=['GET'])
 @cross_origin()
 @verify_token
 def getClients():
@@ -1229,7 +1229,7 @@ def getClients():
     return jsonify({"clients": list(clients)})
 
 
-@app.route('/getCartId', methods=['GET'])
+@app.route('/franchisee/getCartId', methods=['GET'])
 @cross_origin()
 @verify_token
 def getCartId():
@@ -1263,7 +1263,7 @@ def wizardLogin():
         return jsonify({"message": "Authentication Error"}), 401
 
 
-@app.route('/addAliasData', methods=['POST'])
+@app.route('/franchisee/addAliasData', methods=['POST'])
 @cross_origin()
 def addAliasData():
     alias_email = request.json['aliasEmail']
@@ -1280,7 +1280,7 @@ def addAliasData():
         return jsonify({"message": "Succesfully added"})
 
 
-@app.route('/getAliasData', methods=['GET'])
+@app.route('/franchisee/getAliasData', methods=['GET'])
 @cross_origin()
 def getAliasData():
     device_id = request.args.get('customerId')
@@ -1292,7 +1292,7 @@ def getAliasData():
         return jsonify({"result": "No result found"}), 404
 
 
-@app.route('/getMenu', methods=['GET'])
+@app.route('/franchisee/getMenu', methods=['GET'])
 @cross_origin()
 @verify_token
 def getMenu():
@@ -1303,7 +1303,7 @@ def getMenu():
     return jsonify(cart or {})
 
 
-@app.route('/updateMenu/<field>', methods=['POST'])
+@app.route('/franchisee/updateMenu/<field>', methods=['POST'])
 @cross_origin()
 @verify_token
 def updateMenu(field):
@@ -1361,7 +1361,7 @@ def updateMenu(field):
     return jsonify({"message": "Sucess"})
 
 
-@app.route('/getAllLocations', methods=['GET'])
+@app.route('/franchisee/getAllLocations', methods=['GET'])
 @cross_origin()
 @verify_token
 def getAllLocations():
@@ -1376,7 +1376,7 @@ def getAllLocations():
     return jsonify({"message": "No State/City provided"}), 400
 
 
-@app.route('/getAllCategories', methods=['GET'])
+@app.route('/franchisee/getAllCategories', methods=['GET'])
 @cross_origin()
 @verify_token
 def getAllCategories():
@@ -1385,7 +1385,7 @@ def getAllCategories():
     return jsonify({"categories": list(categories)})
 
 
-@app.route('/getItemByCategory', methods=['GET'])
+@app.route('/franchisee/getItemByCategory', methods=['GET'])
 @cross_origin()
 @verify_token
 def getItemByCategory():
@@ -1396,7 +1396,7 @@ def getItemByCategory():
     return jsonify({"items": list(items)})
 
 
-@app.route('/createShopCategory', methods=['POST'])
+@app.route('/franchisee/createShopCategory', methods=['POST'])
 @cross_origin()
 # @verify_token
 def createShopCategory():
@@ -1418,7 +1418,7 @@ def createShopCategory():
     return jsonify({"message": "Missing fields while creating category"}), 400
 
 
-@app.route('/createShopItem', methods=['POST'])
+@app.route('/franchisee/createShopItem', methods=['POST'])
 @cross_origin()
 # @verify_token
 def createShopItem():
@@ -1449,7 +1449,7 @@ def createShopItem():
     return jsonify({"message": "Missing fields while creating item"}), 400
 
 
-@app.route('/addToShoppingCart', methods=['POST'])
+@app.route('/franchisee/addToShoppingCart', methods=['POST'])
 @cross_origin()
 @verify_token
 def addToCartShoppingCart():
@@ -1471,7 +1471,7 @@ def addToCartShoppingCart():
     return jsonify({"message": "Success"})
 
 
-@app.route('/getShoppingCart', methods=['GET'])
+@app.route('/franchisee/getShoppingCart', methods=['GET'])
 @cross_origin()
 @verify_token
 def getShoppingCart():
@@ -1486,7 +1486,7 @@ def getShoppingCart():
     return jsonify(cart)
 
 
-@app.route('/getShoppingItemById', methods=['GET'])
+@app.route('/franchisee/getShoppingItemById', methods=['GET'])
 @cross_origin()
 @verify_token
 def getShoppingItemById():

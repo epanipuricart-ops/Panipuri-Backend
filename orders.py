@@ -50,7 +50,7 @@ def generate_custom_id():
     )
 
 
-@app.route('/getMenu', methods=['GET'])
+@app.route('/orderOnline/getMenu', methods=['GET'])
 @cross_origin()
 @verify_token
 def getMenu():
@@ -61,7 +61,7 @@ def getMenu():
     return jsonify(cart or {})
 
 
-@app.route('/updateMenu/<field>', methods=['POST'])
+@app.route('/orderOnline/updateMenu/<field>', methods=['POST'])
 @cross_origin()
 @verify_token
 def updateMenu(field):
@@ -119,7 +119,7 @@ def updateMenu(field):
     return jsonify({"message": "Sucess"})
 
 
-@app.route('/createMenu/<field>', methods=['POST'])
+@app.route('/orderOnline/createMenu/<field>', methods=['POST'])
 @cross_origin()
 @verify_token
 def createMenu(field):
@@ -176,7 +176,7 @@ def createMenu(field):
         return jsonify({"message": "Invalid field"}), 400
 
 
-@app.route('/deleteMenu/<field>', methods=['POST'])
+@app.route('/orderOnline/deleteMenu/<field>', methods=['POST'])
 @cross_origin()
 @verify_token
 def deleteMenu(field):
@@ -219,7 +219,7 @@ def deleteMenu(field):
     return jsonify({"message": "Sucess"})
 
 
-@app.route('/getAllLocations', methods=['GET'])
+@app.route('/orderOnline/getAllLocations', methods=['GET'])
 @cross_origin()
 @verify_token
 def getAllLocations():
@@ -233,7 +233,7 @@ def getAllLocations():
     return jsonify({"message": "No State/City provided"}), 400
 
 
-@app.route('/orderStatus', methods=['GET'])
+@app.route('/orderOnline/orderStatus', methods=['GET'])
 @cross_origin()
 @verify_token
 def orderStatus():
