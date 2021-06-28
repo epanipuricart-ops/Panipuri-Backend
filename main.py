@@ -676,8 +676,6 @@ def payuSuccess():
         "state": data.get("state"),
         "town": city,
         "location": data.get("location"),
-        "alias_email1": "",
-        "alias_email2": "",
         "order_id": order_id
     })
     mongo.db.order_history.insert_one({
@@ -1249,37 +1247,16 @@ def getCartId():
 def wizardLogin():
     email = request.json['email']
     device_id = request.json['customerId']
-
     data = mongo.db.device_ids.find_one({'device_id': device_id})
-
+    alias_data = mongo.db.alias_data.find({'device_id': device_id})
+    list_alias_email = []
+    if alias_data:
+        for ele in alias_data:
+            list_alias_email.append(ele['alias_email'])
     if (email == data['email']):
         return jsonify({"message": "Successful Login", "customerId": device_id, "role": "franchisee"})
-    elif ((email == data['alias_email1']) or (email == data['alias_email2'])):
+    elif (email in list_alias_email):
         return jsonify({"message": "Successful Login", "customerId": device_id, "role": "alias"})
-    else:
-        return jsonify({"message": "Authentication Error"}), 401
-
-
-@app.route('/signup/wizard', methods=['POST'])
-@cross_origin()
-def wizardSignup():
-    email = request.json['email']
-    device_id = request.json['customerId']
-
-    data = mongo.db.device_ids.find_one({'device_id': device_id})
-
-    if (email == data['email']):
-        return jsonify({
-            "message": "Successful Login",
-            "customerId": device_id,
-            "role": "franchise"
-        })
-    elif ((email == data['alias_email']) or (email == data['alias_email2'])):
-        return jsonify({
-            "message": "Successful Login",
-            "customerId": device_id,
-            "role": "alias"
-        })
     else:
         return jsonify({"message": "Authentication Error"}), 401
 
@@ -1501,7 +1478,7 @@ def getShoppingCart():
                              "verify_aud": False
                          })
     email = decoded['email']
-    cart = mongo.db.shopping_cart.find_one({"email": email})
+    cart = mongo.db.shopping_cart.find_one({"email": email},{"_id": 0})
     return jsonify(cart)
 
 
