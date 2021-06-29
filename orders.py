@@ -274,48 +274,68 @@ def placeOrderEvent(data):
     if not isinstance(data.get("items"), list):
         emit("placeOrder", {"message": "Invalid items sent"}, json=True)
         return
+    itemsDict = {}
+    for item in data.get("items"):
+        createItems = {field: value for field,
+                       value in item.items() if field in ["itemId", "qty"]}
+        if (len(createItems) == 2):
+            itemsDict.update({createItems["itemId"]: createItems["qty"]})
+        else:
+            emit("placeOrder", {"message": "Invalid items sent"}, json=True)
+            return
+    data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
+    itemsList = list(itemsDict.keys())
     if len(createOrder) == len(valid_fields):
         data = mongo.db.menu.aggregate(
             [
                 {
                     "$match":
-                    {"cartId": json["cartId"]}
+                    {"cartId": data["cartId"]}
                 },
                 {"$unwind": "$menu"},
                 {
                     "$match":
                     {
-                        "menu.items.itemId": {"$in": json["items"]}
+                        "menu.items.itemId": {"$in": itemsList}
                     }
                 },
                 {"$unwind": "$menu.items"},
                 {
                     "$match":
-                    {"menu.items.itemId": {"$in": json["items"]}}
+                    {"menu.items.itemId": {"$in": itemsList}}
                 },
                 {
-                    "$group":
+                    "$project":
                     {
-                        "_id": None,
-                        "subTotal": {"$sum": "$menu.items.price"},
-                        "gst": {"$first": "$gst"},
-                        "sid": {"$first": "$sid"}
+                        "_id": 0,
+                        # "subTotal": {"$sum": "$menu.items.price"},
+                        "itemId": "$menu.items.itemId",
+                        "gst": 1,
+                        "sid": 1,
+                        "price": "$menu.items.price"
                     }
                 }
             ])
-        data = list(data)[0]
+
+        data = list(data)
+        extraData = {"subTotal": 0,
+                     "gst": data[0]["gst"], "sid": data[0]["sid"]}
+        for d in data:
+            extraData["subTotal"] += d["price"]*itemsDict.get(d["itemId"], 1)
         orderFields = {
             "orderId": generate_custom_id(),
             "timestamp": int(round(time.time() * 1000)),
             "orderStatus": "placed",
-            "subTotal": data["subTotal"],
-            "gst": data["gst"],
-            "total": (1+data["gst"]/100)*data["subTotal"]
+            "subTotal": extraData["subTotal"],
+            "gst": extraData["gst"],
+            "total": round(
+                (1+extraData["gst"]/100)*extraData["subTotal"], 2)
         }
         createOrder.update(orderFields)
         mongo.db.online_orders.insert_one(createOrder)
+        createOrder.pop("_id")
         emit("placeOrder", createOrder, json=True)
-        emit("receiveOrder", createOrder, json=True, room=data["sid"])
+        emit("receiveOrder", createOrder, json=True, room=extraData["sid"])
         return
     emit("placeOrder", {
          "message": "Missing fields while creating order"}, json=True)
