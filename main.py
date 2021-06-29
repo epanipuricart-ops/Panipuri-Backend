@@ -49,6 +49,8 @@ agreement_url = "http://15.207.147.88:8081/"
 mailer_url = "http://15.207.147.88:8082/"
 payment_url = "http://15.207.147.88:8083/"
 
+ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
+
 
 def verify_token(f):
     @wraps(f)
@@ -91,6 +93,41 @@ def generate_custom_id():
     )
 
 
+def send_data_to_zoho(client):
+    zoho_records = [{
+        "First_Name": client.get("firstName"),
+        "Last_Name": client.get("lastName"),
+        "Email": client.get("email"),
+        "Phone": client.get("mobile")
+    }]
+    if (
+        ZOHO_TOKEN["access_token"] == "" or
+        time.time()-ZOHO_TOKEN["timestamp"] >= 1800
+    ):
+        refresh_token_url = "https://accounts.zoho.in/oauth/v2/token"
+        response = requests.post(
+            refresh_token_url,
+            data={
+                "refresh_token": cfg.ZohoConfig["refresh_token"],
+                "client_id": cfg.ZohoConfig["client_id"],
+                "client_secret": cfg.ZohoConfig["client_secret"],
+                "grant_type": "refresh_token"
+            }).json()
+        ZOHO_TOKEN["access_token"] = response["access_token"]
+        ZOHO_TOKEN["timestamp"] = time.time()
+    contacts = "https://www.zohoapis.in/crm/v2/Contacts"
+    header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
+    data = {
+        "data": zoho_records,
+        "trigger": [
+            "approval",
+            "workflow",
+            "blueprint"
+        ]
+    }
+    requests.post(contacts, headers=header, json=data)
+
+
 @app.route('/franchisee/register/<path:path>', methods=['POST'])
 @cross_origin()
 def register(path):
@@ -119,6 +156,7 @@ def register(path):
         }
         try:
             mongo.db.clients.insert_one(doc)
+            send_data_to_zoho(doc)
             return jsonify({
                 "title": doc['title'],
                 "firstName": doc['firstName'],
@@ -127,7 +165,7 @@ def register(path):
                 "mobile": doc['mobile'],
                 "roles": doc['roles']
             })
-        except:
+        except Exception:
             return jsonify({"message": "Some error occurred"}), 500
 
     elif path.lower() == 'customer':
@@ -1536,47 +1574,6 @@ def getShoppingItemById():
     if itemDetail:
         return jsonify(itemDetail[0]["items"])
     return jsonify({"message": "No such Item Found"})
-
-
-@scheduler.task('cron', id='send_to_zoho', minute=0, hour=0)
-def send_data_to_zoho():
-    newClients = mongo.db.clients.find({"exportedZoho": False})
-    processedIds = []
-    zoho_records = []
-    for client in newClients:
-        zoho_records.append({
-            "First_Name": client.get("firstName"),
-            "Last_Name": client.get("lastName"),
-            "Email": client.get("email"),
-            "Phone": client.get("mobile")
-        })
-        processedIds.append(client["_id"])
-    if not zoho_records:
-        return
-    mongo.db.clients.update_many({
-        "_id": {"$in": processedIds}
-    }, {"$set": {"exportedZoho": True}})
-    refresh_token_url = "https://accounts.zoho.in/oauth/v2/token"
-    response = requests.post(
-        refresh_token_url,
-        data={
-            "refresh_token": cfg.ZohoConfig["refresh_token"],
-            "client_id": cfg.ZohoConfig["client_id"],
-            "client_secret": cfg.ZohoConfig["client_secret"],
-            "grant_type": "refresh_token"
-        }).json()
-    access_token = response["access_token"]
-    contacts = "https://www.zohoapis.in/crm/v2/Contacts"
-    header = {"Authorization": "Zoho-oauthtoken "+access_token}
-    data = {
-        "data": zoho_records,
-        "trigger": [
-            "approval",
-            "workflow",
-            "blueprint"
-        ]
-    }
-    requests.post(contacts, headers=header, json=data)
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
