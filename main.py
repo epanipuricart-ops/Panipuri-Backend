@@ -1452,7 +1452,7 @@ def createShopItem():
 @app.route('/franchisee/addToShoppingCart', methods=['POST'])
 @cross_origin()
 @verify_token
-def addToCartShoppingCart():
+def addToShoppingCart():
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
                          options={
@@ -1461,11 +1461,37 @@ def addToCartShoppingCart():
                          })
     email = decoded['email']
     itemId = request.json.get("itemId")
-    qty = request.json.get("qty", 1)
     mongo.db.shopping_cart.update_one(
         {"email": email},
         {"$push": {
-            "items": {"itemId": itemId, "qty": qty}
+            "items": itemId
+        }},
+        upsert=True)
+    return jsonify({"message": "Success"})
+
+
+@app.route('/franchisee/removeFromShoppingCart', methods=['POST'])
+@cross_origin()
+@verify_token
+def removeFromShoppingCart():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    itemId = request.json.get("itemId")
+    cart = mongo.db.shopping_cart.find_one({"email": email}, {"_id": 0})
+    if not cart:
+        return jsonify({"message": "Cart Empty"}), 400
+    items = cart.get("items", [])
+    if itemId in items:
+        items.remove(itemId)
+    mongo.db.shopping_cart.update_one(
+        {"email": email},
+        {"$set": {
+            "items": items
         }},
         upsert=True)
     return jsonify({"message": "Success"})
@@ -1483,6 +1509,13 @@ def getShoppingCart():
                          })
     email = decoded['email']
     cart = mongo.db.shopping_cart.find_one({"email": email}, {"_id": 0})
+    if not cart:
+        return jsonify({"message": "Cart Empty"}), 400
+    items_dict = {}
+    for item in cart.get("items", []):
+        items_dict[item] = items_dict.get(item, 0)+1
+    items = [{"itemId": k, "qty": v} for k, v in items_dict.items()]
+    cart.update({"items": items})
     return jsonify(cart)
 
 
