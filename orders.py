@@ -245,16 +245,11 @@ def orderStatus():
     return jsonify({"message": "No orderId Sent"}), 400
 
 
-@socketio.on("registerSid")
-def registerSidEvent(data):
-    cartId = data.get("cartId")
-    if cartId:
-        mongo.db.menu.update_one({"cartId": cartId}, {
-                                 "$set": {"sid": request.sid}})
-
-
-@socketio.on('placeOrder')
-def placeOrderEvent(data):
+@app.route('/orderOnline/placeOrder', methods=['POST'])
+@cross_origin()
+@verify_token
+def placeOrder():
+    data = request.json
     valid_fields = [
         "cartId",
         "customerName",
@@ -272,8 +267,7 @@ def placeOrderEvent(data):
     createOrder = {field: value for field,
                    value in data.items() if field in valid_fields}
     if not isinstance(data.get("items"), list):
-        emit("placeOrder", {"message": "Invalid items sent"}, json=True)
-        return
+        return jsonify({"message": "Invalid items sent"})
     itemsDict = {}
     for item in data.get("items"):
         createItems = {field: value for field,
@@ -281,8 +275,7 @@ def placeOrderEvent(data):
         if (len(createItems) == 2):
             itemsDict.update({createItems["itemId"]: createItems["qty"]})
         else:
-            emit("placeOrder", {"message": "Invalid items sent"}, json=True)
-            return
+            return jsonify({"message": "Invalid items sent"})
     data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
     itemsList = list(itemsDict.keys())
     if len(createOrder) == len(valid_fields):
@@ -334,11 +327,18 @@ def placeOrderEvent(data):
         createOrder.update(orderFields)
         mongo.db.online_orders.insert_one(createOrder)
         createOrder.pop("_id")
-        emit("placeOrder", createOrder, json=True)
-        emit("receiveOrder", createOrder, json=True, room=extraData["sid"])
-        return
-    emit("placeOrder", {
-         "message": "Missing fields while creating order"}, json=True)
+        socketio.emit("receiveOrder", createOrder,
+                      json=True, room=extraData["sid"])
+        return jsonify(createOrder)
+    return jsonify({"message": "Missing fields while creating order"})
+
+
+@socketio.on("registerSid")
+def registerSidEvent(data):
+    cartId = data.get("cartId")
+    if cartId:
+        mongo.db.menu.update_one({"cartId": cartId}, {
+                                 "$set": {"sid": request.sid}})
 
 
 # @socketio.on("receiveOrder")
