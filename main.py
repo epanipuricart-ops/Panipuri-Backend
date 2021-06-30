@@ -80,7 +80,7 @@ def get_last_id(city):
             "value": 1
         }})
     if data:
-        new_id = "epanipuricart." + city + "." + str(data["value"])
+        new_id = "epanipuricart." + data["city"] + "." + str(data["value"])
     else:
         new_id = "epanipuricart.dummy.5"
     return new_id
@@ -616,9 +616,9 @@ def payNow():
         "productinfo":
         (model_data['name'] + " " + model_data['extension']).rstrip(),
         "surl":
-        "http://15.207.147.88:5000/payuSuccess",
+        "http://15.207.147.88:5000/franchisee/payuSuccess",
         "furl":
-        "http://15.207.147.88:5000/payuFailure",
+        "http://15.207.147.88:5000/franchisee/payuFailure",
         "firstname":
         firstName,
         "email":
@@ -716,7 +716,7 @@ def payuSuccess():
         "state": data.get("state"),
         "town": city,
         "location": data.get("location"),
-        "order_id": order_id
+        "order_id": "EK-" + str(order_id)
     })
     mongo.db.order_history.insert_one({
         "order_id": order_id,
@@ -1010,7 +1010,7 @@ def getMOU():
         return jsonify({"message": "Some Error Occurred"}), 500
 
 
-@app.route("/getFigures", methods=['GET'])
+@app.route("/franchisee/getFigures", methods=['GET'])
 @cross_origin()
 def getFigures():
     obj = mongo.db.company_figures.find_one({"id": 1})
@@ -1021,7 +1021,7 @@ def getFigures():
     return jsonify(data)
 
 
-@app.route("/saveFigures", methods=['POST'])
+@app.route("/franchisee/saveFigures", methods=['POST'])
 @cross_origin()
 @verify_token
 def saveFigures():
@@ -1106,7 +1106,7 @@ def getOrderById():
     }, {
         "_id": 0
     })
-    return jsonify(order_status)
+    return jsonify(order_status or {})
 
 
 @app.route('/franchisee/uploadAgreement', methods=['POST'])
@@ -1589,7 +1589,6 @@ def move_agreement_pdf():
 
 if __name__ == "__main__":
     print("starting...")
-    send_data_to_zoho()
     app.run(host=cfg.Flask['HOST'],
             port=cfg.Flask['PORT'],
             threaded=cfg.Flask['THREADED'],
