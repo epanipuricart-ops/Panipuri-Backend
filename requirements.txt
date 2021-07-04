@@ -3,3 +3,6 @@ Flask
 Flask-Cors
 Flask-PyMongo
 Flask-APScheduler
+firebase-admin
+pyrebase
+Flask-SocketIO

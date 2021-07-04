@@ -18,7 +18,7 @@ app = Flask(__name__, static_url_path='')
 
 CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
-app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
+app.config["MONGO_URI"] = "mongodb+srv://gnosticplayer:hacked123@cluster0.qarzu.mongodb.net/panipuri"
 # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
 socketio = SocketIO(app)
@@ -245,16 +245,59 @@ def orderStatus():
     return jsonify({"message": "No orderId Sent"}), 400
 
 
-@socketio.on("registerSid")
-def registerSidEvent(data):
-    cartId = data.get("cartId")
-    if cartId:
-        mongo.db.menu.update_one({"cartId": cartId}, {
-                                 "$set": {"sid": request.sid}})
+@app.route('/orderOnline/addToOrderCart', methods=['POST'])
+@cross_origin()
+@verify_token
+def addToOrderCart():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    itemId = request.json.get("itemId")
+    mongo.db.order_cart.update_one(
+        {"email": email},
+        {"$push": {
+            "items": itemId
+        }},
+        upsert=True)
+    return jsonify({"message": "Success"})
 
 
-@socketio.on('placeOrder')
-def placeOrderEvent(data):
+@app.route('/orderOnline/removeFromOrderCart', methods=['POST'])
+@cross_origin()
+@verify_token
+def removeFromOrderCart():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    itemId = request.json.get("itemId")
+    cart = mongo.db.order_cart.find_one({"email": email}, {"_id": 0})
+    if not cart:
+        return jsonify({"message": "Cart Empty"}), 400
+    items = cart.get("items", [])
+    if itemId in items:
+        items.remove(itemId)
+    mongo.db.order_cart.update_one(
+        {"email": email},
+        {"$set": {
+            "items": items
+        }},
+        upsert=True)
+    return jsonify({"message": "Success"})
+
+
+@app.route('/orderOnline/placeOrder', methods=['POST'])
+@cross_origin()
+@verify_token
+def placeOrder():
+    data = request.json
     valid_fields = [
         "cartId",
         "customerName",
@@ -262,7 +305,6 @@ def placeOrderEvent(data):
         "customerEmail",
         "deliveryAddress",
         "orderType",
-        "items",
         "modeOfPayment",
         "transactionId"]
     if "orderType" not in data:
@@ -271,21 +313,19 @@ def placeOrderEvent(data):
         data["transactionId"] = ""
     createOrder = {field: value for field,
                    value in data.items() if field in valid_fields}
-    if not isinstance(data.get("items"), list):
-        emit("placeOrder", {"message": "Invalid items sent"}, json=True)
-        return
-    itemsDict = {}
-    for item in data.get("items"):
-        createItems = {field: value for field,
-                       value in item.items() if field in ["itemId", "qty"]}
-        if (len(createItems) == 2):
-            itemsDict.update({createItems["itemId"]: createItems["qty"]})
-        else:
-            emit("placeOrder", {"message": "Invalid items sent"}, json=True)
-            return
-    data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
-    itemsList = list(itemsDict.keys())
+
     if len(createOrder) == len(valid_fields):
+        email = createOrder['customerEmail']
+        cart = mongo.db.order_cart.find_one_and_delete(
+            {"email": email}, {"_id": 0})
+        if not cart:
+            return jsonify({"message": "Cart Empty"}), 400
+        itemsDict = {}
+        for item in cart.get("items", []):
+            itemsDict[item] = itemsDict.get(item, 0)+1
+
+        data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
+        itemsList = list(itemsDict.keys())
         data = mongo.db.menu.aggregate(
             [
                 {
@@ -308,7 +348,6 @@ def placeOrderEvent(data):
                     "$project":
                     {
                         "_id": 0,
-                        # "subTotal": {"$sum": "$menu.items.price"},
                         "itemId": "$menu.items.itemId",
                         "gst": 1,
                         "sid": 1,
@@ -334,27 +373,17 @@ def placeOrderEvent(data):
         createOrder.update(orderFields)
         mongo.db.online_orders.insert_one(createOrder)
         createOrder.pop("_id")
-        emit("placeOrder", createOrder, json=True)
-        emit("receiveOrder", createOrder, json=True, room=extraData["sid"])
-        return
-    emit("placeOrder", {
-         "message": "Missing fields while creating order"}, json=True)
+        socketio.emit("receiveOrder", createOrder,
+                      json=True, room=extraData["sid"])
+        return jsonify(createOrder)
+    return jsonify({"message": "Missing fields while creating order"})
 
 
-# @socketio.on("receiveOrder")
-# def receiveOrderEvent(data):
-#     cartId = data.get("cartId")
-#     if cartId:
-#         newOrders = mongo.db.online_orders.find(
-#             {"cartId": cartId, "orderStatus": "placed"},
-#             {"_id": 0})
-#         emit("receiveOrder", {"orders": list(newOrders)}, json=True)
-#         return
-#     emit("receiveOrder", {"message": "No cartId sent"})
-
-
-@socketio.on("updateStatus")
-def updateStatusEvent(data):
+@app.route('/orderOnline/updateOrderStatus', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateOrderStatus():
+    data = request.json
     orderId = data.get("orderId")
     status = data.get("status")
     if orderId and status:
@@ -363,9 +392,28 @@ def updateStatusEvent(data):
             {"$set": {
                 "orderStatus": status
             }})
-        emit("updateStatus", {"message": "Success"}, json=True)
+        return jsonify({"message": "Success"})
+    return jsonify({"message": "Missing fields"}), 400
+
+
+@socketio.on("registerSid")
+def registerSidEvent(data):
+    cartId = data.get("cartId")
+    if cartId:
+        mongo.db.menu.update_one({"cartId": cartId}, {
+                                 "$set": {"sid": request.sid}})
+
+
+@socketio.on("getOrderByOrderId")
+def getOrderByOrderIdEvent(data):
+    orderId = data.get("orderId")
+    if orderId:
+        newOrders = mongo.db.online_orders.find_one(
+            {"orderId": orderId},
+            {"_id": 0})
+        emit("getOrderByOrderId", newOrders, json=True)
         return
-    emit("updateStatus", {"message": "Missing fields"}, json=True)
+    emit("getOrderByOrderId", {"message": "No orderId sent"})
 
 
 @socketio.on("allOrderStatus")
