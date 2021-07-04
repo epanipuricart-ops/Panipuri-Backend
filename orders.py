@@ -18,7 +18,7 @@ app = Flask(__name__, static_url_path='')
 
 CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
-app.config["MONGO_URI"] = "mongodb+srv://gnosticplayer:hacked123@cluster0.qarzu.mongodb.net/panipuri"
+app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
 socketio = SocketIO(app)
@@ -451,8 +451,7 @@ def allOrderStatusEvent(data):
 
 if __name__ == "__main__":
     print("starting...")
-    socketio.run(app,
-                 host=cfg.OrderFlask['HOST'],
-                 port=cfg.OrderFlask['PORT'],
-                 threaded=cfg.OrderFlask['THREADED'],
-                 debug=True)
+    app.run(host=cfg.OrderFlask['HOST'],
+            port=cfg.OrderFlask['PORT'],
+            threaded=cfg.OrderFlask['THREADED'],
+            debug=True)
