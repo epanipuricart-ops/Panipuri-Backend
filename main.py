@@ -1576,6 +1576,66 @@ def getShoppingItemById():
     return jsonify({"message": "No such Item Found"})
 
 
+@app.route('/franchisee/getFavourites', methods=['GET'])
+@cross_origin()
+@verify_token
+def getFavourites():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    favourites = mongo.db.shopping_favourites.find_one(
+        {"email": email}, {"_id": 0})
+    if not favourites:
+        return jsonify({"message": "Cart Empty"}), 400
+    models = {"models": list(set(favourites.get("models", [])))}
+    return jsonify(models)
+
+
+@app.route('/franchisee/addToFavourites', methods=['POST'])
+@cross_origin()
+@verify_token
+def addToFavourites():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    modelUid = request.json.get("uid")
+    mongo.db.shopping_favourites.update_one(
+        {"email": email},
+        {"$push": {
+            "models": modelUid
+        }},
+        upsert=True)
+    return jsonify({"message": "Success"})
+
+
+@app.route('/franchisee/removeFromFavourites', methods=['POST'])
+@cross_origin()
+@verify_token
+def removeFromFavourites():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    modelUid = request.json.get("uid")
+    mongo.db.shopping_favourites.update_one(
+        {"email": email},
+        {"$pull": {
+            "models": modelUid
+        }})
+    return jsonify({"message": "Success"})
+
+
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
 def move_agreement_pdf():
     source_dir = 'public/agreement_pdf'

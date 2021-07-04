@@ -245,6 +245,28 @@ def orderStatus():
     return jsonify({"message": "No orderId Sent"}), 400
 
 
+@app.route('/orderOnline/getOrderCart', methods=['GET'])
+@cross_origin()
+@verify_token
+def getOrderCart():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    cart = mongo.db.order_cart.find_one({"email": email}, {"_id": 0})
+    if not cart:
+        return jsonify({"message": "Cart Empty"}), 400
+    items_dict = {}
+    for item in cart.get("items", []):
+        items_dict[item] = items_dict.get(item, 0)+1
+    items = [{"itemId": k, "qty": v} for k, v in items_dict.items()]
+    cart.update({"items": items})
+    return jsonify(cart)
+
+
 @app.route('/orderOnline/addToOrderCart', methods=['POST'])
 @cross_origin()
 @verify_token
