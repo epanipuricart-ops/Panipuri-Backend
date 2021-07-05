@@ -93,13 +93,7 @@ def generate_custom_id():
     )
 
 
-def send_data_to_zoho(client):
-    zoho_records = [{
-        "First_Name": client.get("firstName"),
-        "Last_Name": client.get("lastName"),
-        "Email": client.get("email"),
-        "Phone": client.get("mobile")
-    }]
+def refresh_zoho_access_token():
     if (
         ZOHO_TOKEN["access_token"] == "" or
         time.time()-ZOHO_TOKEN["timestamp"] >= 1800
@@ -115,6 +109,16 @@ def send_data_to_zoho(client):
             }).json()
         ZOHO_TOKEN["access_token"] = response["access_token"]
         ZOHO_TOKEN["timestamp"] = time.time()
+
+
+def send_data_to_zoho(clients):
+    zoho_records = [{
+        "First_Name": client.get("firstName"),
+        "Last_Name": client.get("lastName"),
+        "Email": client.get("email"),
+        "Phone": client.get("mobile")
+    } for client in clients]
+    refresh_zoho_access_token()
     contacts = "https://www.zohoapis.in/crm/v2/Contacts"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
     data = {
@@ -125,7 +129,15 @@ def send_data_to_zoho(client):
             "blueprint"
         ]
     }
-    requests.post(contacts, headers=header, json=data)
+    response = requests.post(contacts, headers=header, json=data).json()
+    zoho_customers = []
+    for i, client in enumerate(clients):
+        response_record = response["data"][i]
+        if response_record["code"].upper() == "SUCCESS":
+            zoho_customers.append({
+                "email": client.get("email"),
+                "zohoId": response_record["details"]["id"]})
+    mongo.db.zoho_customer.insert_many(zoho_customers)
 
 
 @app.route('/franchisee/register/<path:path>', methods=['POST'])
@@ -156,7 +168,7 @@ def register(path):
         }
         try:
             mongo.db.clients.insert_one(doc)
-            send_data_to_zoho(doc)
+            # send_data_to_zoho(doc)
             return jsonify({
                 "title": doc['title'],
                 "firstName": doc['firstName'],
@@ -1062,7 +1074,7 @@ def updateOrder():
             "date": int(round(time.time() * 1000))
         })
         return jsonify({"message": "Success"})
-    except:
+    except Exception:
         return jsonify({"message": "Some Error Occurred"}), 500
 
 
@@ -1177,7 +1189,7 @@ def saveBlog():
                 })
             photo.save(save_path)
             return jsonify({"message": "Success"})
-        except:
+        except Exception:
             return jsonify({"message": "Some Error Occurred"}), 500
     return jsonify({"message": "Only JPG/PNG files allowed"}), 400
 
@@ -1206,7 +1218,7 @@ def deleteBlog():
     try:
         os.remove(os.path.abspath(
             os.path.join(BLOG_PHOTO_FOLDER, data['photo'])))
-    except:
+    except Exception:
         pass
     return jsonify({"message": "Success"})
 
@@ -1231,7 +1243,7 @@ def updateBlog():
         try:
             os.remove(os.path.abspath(
                 os.path.join(BLOG_PHOTO_FOLDER, oldBlog['photo'])))
-        except:
+        except Exception:
             pass
         ext = photo.filename.lower().split(".")[-1]
         if ext in ["jpg", "png"]:
@@ -1243,7 +1255,7 @@ def updateBlog():
                     os.path.join(BLOG_PHOTO_FOLDER, enc_filename))
                 photo.save(save_path)
                 newBlog.update({"photo": enc_filename})
-            except:
+            except Exception:
                 return jsonify({"message": "Some Error Occurred"}), 500
         else:
             return jsonify({"message": "Only JPG/PNG files allowed"}), 400
@@ -1294,9 +1306,15 @@ def wizardLogin():
         for ele in alias_data:
             list_alias_email.append(ele['alias_email'])
     if (email == data['email']):
-        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "franchisee"})
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "franchisee"})
     elif (email in list_alias_email):
-        return jsonify({"message": "Successful Login", "customerId": device_id, "role": "alias"})
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "alias"})
     else:
         return jsonify({"message": "Authentication Error"}), 401
 
@@ -1634,6 +1652,32 @@ def removeFromFavourites():
             "models": modelUid
         }})
     return jsonify({"message": "Success"})
+
+
+@app.route('/franchisee/createEstimate', methods=['POST'])
+@cross_origin()
+@verify_token
+def createEstimate():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    modelUid = request.json.get("uid")
+    return jsonify({"message": "Success"})
+
+
+@scheduler.task('cron', id='zoho_crm_create', minute='*/30')
+def zoho_crm_create():
+    records = []
+    record = mongo.db.clients.find_one_and_update(
+        {"exportedZoho": False}, {"$set": {"exportedZoho": True}})
+    while record and len(records) < 100:
+        records.append(record)
+    if records:
+        send_data_to_zoho(records)
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
