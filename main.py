@@ -1669,6 +1669,118 @@ def createEstimate():
     return jsonify({"message": "Success"})
 
 
+@app.route('/upload', methods=['GET', 'POST'])
+@cross_origin()
+def upload():
+    if request.method == "POST":
+        timestamp = int(round(time.time() * 1000))
+        data = request.json["values"]
+        uid = request.json["deviceId"]
+        print(data)
+        for ele in data:
+            ele["date"] = timestamp
+        existing_data = mongo.db.stats.find_one({"uid": uid})['data']
+        new_data = existing_data + data
+        mongo.db.stats.update_one({'uid': uid}, {'$set': {"data": new_data}})
+        concerned_names = []
+        for ele in data:
+            if ele['status'] == 1:
+                concerned_names.append(ele["name"])
+        arr = mongo.db.counter.find_one({"uid": uid})['data']
+        for item in arr:
+            if item["name"] in concerned_names:
+                if item["count"][-1]["date"] == datetime.now().strftime("%m-%d-%Y"):
+                    item["count"][-1]["dailyCount"] += 1
+                else:
+                    d = {}
+                    d["date"] = datetime.now().strftime("%m-%d-%Y")
+                    d["dailyCount"] = 1
+                    item["count"].append(d)
+
+        mongo.db.counter.update_one({'uid': uid}, {'$set': {"data": arr}})
+        return jsonify({"message": "SUCCESS"})
+    else:
+        return jsonify({"message": "Authorization error"}), 403
+
+
+@app.route('/uploadLevel', methods=['GET', 'POST'])
+@cross_origin()
+def uploadLevel():
+    if request.method == "POST":
+        timestamp = int(round(time.time() * 1000))
+        data = request.json["values"]
+        uid = request.json["deviceId"]
+        for ele in data:
+            ele["date"] = timestamp
+        existing_data = mongo.db.levels.find_one({"uid": uid})['data']
+        new_data = existing_data + data
+        mongo.db.levels.update_one({'uid': uid}, {'$set': {"data": new_data}})
+        return jsonify({"message": "SUCCESS"})
+    else:
+        return jsonify({"message": "Authorization error"}), 403
+
+
+@app.route("/verifyToken", methods=['GET', 'POST'])
+@cross_origin()
+def verifyToken():
+    if request.method == "POST":
+        token = request.headers['Authorization']
+        ele = mongo.db.users.find_one({"token": token})
+        if ele:
+            return jsonify({"message": "VALID"})
+        else:
+            message, statusCode = checkValidity(token)
+            if statusCode == 200:
+                users = mongo.db.users
+                post = {"uid": message['uid'], "token": token}
+                users.insert_one(post)
+                return jsonify({"message": message['status']})
+            else:
+                return jsonify({"message": message['status']}), 401
+    else:
+        return jsonify({"message": "Authorization Error"}), 403
+
+
+@app.route("/deleteToken", methods=['GET', 'POST'])
+@cross_origin()
+def deleteToken():
+    if request.method == "POST":
+        token = request.headers['Authorizations']
+        ele = mongo.db.users.find_one({"token": token})
+        if ele:
+            mongo.db.users.delete_one({"token": token})
+            return jsonify({"message": "SUCCESS"})
+        else:
+            return jsonify({"message": "No record found"}),
+
+
+@app.route("/postPowerOut", methods=['GET', 'POST'])
+@cross_origin()
+def postPowerOut():
+    if request.method == "POST":
+        uid = request.json["uid"]
+        mongo.db.devices.update(
+            {"uid": uid}, {'$set': {"deviceState": 0, "activeState": 0}})
+        return jsonify({"message": "SUCCESS"})
+    else:
+        return jsonify({"message": "Authorization Error"}), 403
+
+
+@app.route("/getSwitchStatus", methods=['GET', 'POST'])
+@cross_origin()
+def getSwitchStatus():
+    uid = request.args.get("uid")
+    data = mongo.db.devices.find_one({"uid": uid})
+    if data:
+        d = {}
+        d['activeState'] = data['activeState']
+        d['settings'] = data['settings']
+        d['mode'] = data['mode']
+        return jsonify(d)
+    else:
+        return jsonify({"message": "Invalid Device Id"}), 403
+
+
 @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
 def zoho_crm_create():
     records = []
