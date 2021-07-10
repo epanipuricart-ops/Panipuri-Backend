@@ -116,7 +116,7 @@ def updateMenu(field):
             })
     else:
         return jsonify({"message": "Invalid field"}), 400
-    return jsonify({"message": "Sucess"})
+    return jsonify({"message": "Success"})
 
 
 @app.route('/orderOnline/createMenu/<field>', methods=['POST'])
