@@ -21,7 +21,8 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
-socketio = SocketIO(app, cors_allowed_origins="*",logger=True,engineio_logger=True)
+socketio = SocketIO(app, cors_allowed_origins="*",
+                    logger=True, engineio_logger=True)
 # socketio.init_app(app, cors_allowed_origins="*")
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
@@ -434,16 +435,20 @@ def getOrderByTypeAndStatus():
 
 @socketio.on('connect')
 def connected():
-    print("SID is",request.sid)
-    socketio.emit("myresponse", {"status": "connected"})
+    print("SID is", request.sid)
+    emit("myresponse", {"status": "connected"})
+
 
 @socketio.on("registerSid")
 def registerSidEvent(data):
     cartId = data.get("cartId")
-    print("CArtID: ",cartId)
+    print("CartID: ", cartId)
     if cartId:
         mongo.db.menu.update_one({"cartId": cartId}, {
                                  "$set": {"sid": request.sid}})
+        emit("regResponse", {"status": "registered"})
+        return
+    emit("regResponse", {"status": "failed"})
 
 
 @socketio.on("getOrderByOrderId")
