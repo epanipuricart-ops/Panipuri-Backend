@@ -418,6 +418,19 @@ def updateOrderStatus():
     return jsonify({"message": "Missing fields"}), 400
 
 
+@app.route('/orderOnline/getOrderByTypeAndStatus', methods=['GET'])
+@cross_origin()
+@verify_token
+def getOrderByTypeAndStatus():
+    status = request.args.get("status")
+    _type = request.args.get("type")
+    if status and _type:
+        orders = mongo.db.online_orders.find(
+            {"orderType": _type, "orderStatus": status}, {"_id": 0})
+        return jsonify({"orders": list(orders)})
+    return jsonify({"message": "No status/type arguments sent"}), 400
+
+
 @socketio.on("registerSid")
 def registerSidEvent(data):
     cartId = data.get("cartId")
@@ -440,7 +453,12 @@ def getOrderByOrderIdEvent(data):
 
 @socketio.on("allOrderStatus")
 def allOrderStatusEvent(data):
-    clientEmail = data.get("clientEmail")
+    token = data.get("token")
+    clientEmail = jwt.decode(token,
+                             options={
+                                 "verify_signature": False,
+                                 "verify_aud": False
+                             })['email']
     if clientEmail:
         orders = mongo.db.online_orders.find(
             {"customerEmail": clientEmail}, {"_id": 0})
