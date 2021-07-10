@@ -375,12 +375,15 @@ def placeOrder():
                         "itemId": "$menu.items.itemId",
                         "gst": 1,
                         "sid": 1,
+                        "isActive": 1,
                         "price": "$menu.items.price"
                     }
                 }
             ])
 
         data = list(data)
+        if not data[0]["isActive"]:
+            return jsonify({"message": "Restaurant Offline"}), 400
         extraData = {"subTotal": 0,
                      "gst": data[0]["gst"], "sid": data[0]["sid"]}
         for d in data:
@@ -445,7 +448,7 @@ def registerSidEvent(data):
     print("CartID: ", cartId)
     if cartId:
         mongo.db.menu.update_one({"cartId": cartId}, {
-                                 "$set": {"sid": request.sid}})
+                                 "$push": {"sid": request.sid}})
         emit("regResponse", {"status": "registered"})
         return
     emit("regResponse", {"status": "failed"})
