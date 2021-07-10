@@ -21,7 +21,8 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*",logger=True,engineio_logger=True)
+# socketio.init_app(app, cors_allowed_origins="*")
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
@@ -116,7 +117,7 @@ def updateMenu(field):
             })
     else:
         return jsonify({"message": "Invalid field"}), 400
-    return jsonify({"message": "Success"})
+    return jsonify({"message": "Sucess"})
 
 
 @app.route('/orderOnline/createMenu/<field>', methods=['POST'])
@@ -431,9 +432,15 @@ def getOrderByTypeAndStatus():
     return jsonify({"message": "No status/type arguments sent"}), 400
 
 
+@socketio.on('connect')
+def connected():
+    print("SID is",request.sid)
+    socketio.emit("myresponse", {"status": "connected"})
+
 @socketio.on("registerSid")
 def registerSidEvent(data):
     cartId = data.get("cartId")
+    print("CArtID: ",cartId)
     if cartId:
         mongo.db.menu.update_one({"cartId": cartId}, {
                                  "$set": {"sid": request.sid}})
@@ -469,7 +476,8 @@ def allOrderStatusEvent(data):
 
 if __name__ == "__main__":
     print("starting...")
-    app.run(host=cfg.OrderFlask['HOST'],
-            port=cfg.OrderFlask['PORT'],
-            threaded=cfg.OrderFlask['THREADED'],
-            debug=True)
+    socketio.run(app,
+                 host=cfg.OrderFlask['HOST'],
+                 port=cfg.OrderFlask['PORT'],
+                 # threaded=cfg.OrderFlask['THREADED'],
+                 debug=False)
