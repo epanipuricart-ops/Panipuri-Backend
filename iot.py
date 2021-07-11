@@ -4,6 +4,7 @@ from flask_cors import CORS, cross_origin
 import time
 import datetime
 import os
+import binascii
 from config import config as cfg
 from modules import *
 
@@ -14,6 +15,13 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
+
+
+def generate_custom_id():
+    return (
+        binascii.b2a_hex(os.urandom(4)).decode() +
+        hex(int(time.time()*10**5) % 10**12)[2:]
+    )
 
 
 @app.route('/upload', methods=['GET', 'POST'])
@@ -393,7 +401,7 @@ def getLevel():
         else:
             return jsonify({"message": "No record found"}), 403
     else:
-        return jsonify({"message": "Authentication Error"}), 401 
+        return jsonify({"message": "Authentication Error"}), 401
 
 
 @app.route("/getCount", methods=['GET', 'POST'])
@@ -467,6 +475,83 @@ def getCountByDate():
             return jsonify({"message": "Authentication error"}), 401
     else:
         return jsonify({"message": "Authorization Error"}), 403
+
+
+@app.route("/wizard/getProfile", methods=['GET'])
+@cross_origin()
+def getProfile():
+    device_id = request.args.get("deviceId")
+    if device_id:
+        profile = mongo.db.wizard_profile.find_one(
+            {"deviceId": device_id}, {"_id": 0})
+        return jsonify(profile)
+    return jsonify({"message": "No deviceId sent"}), 400
+
+
+@app.route("/wizard/updateProfile", methods=['POST'])
+@cross_origin()
+def updateProfileWizard():
+    data = request.json
+    if data is None:
+        return jsonify({"message": "No JSON data sent"}), 400
+
+    device_id = request.args.get("deviceId")
+    if device_id is None:
+        return jsonify({"message": "No deviceId sent"}), 400
+    valid_fields = ["lat", "lon"]
+    updateProfileCol = {field: value for field,
+                        value in data.items() if field in valid_fields}
+    mongo.db.wizard_profile.update_one(
+        {
+            "deviceId": device_id
+        },
+        {
+            "$set": updateProfileCol
+        })
+    return jsonify({"message": "Success"})
+
+
+@app.route("/wizard/updatePayment/<str:action>", methods=['POST'])
+@cross_origin()
+def updatePayment(action):
+    data = request.json
+    if data is None:
+        return jsonify({"message": "No JSON data sent"}), 400
+
+    device_id = request.args.get("deviceId")
+    if device_id is None:
+        return jsonify({"message": "No deviceId sent"}), 400
+    if action == "add":
+        valid_fields = ["paymentMode", "phoneNumber", "upi"]
+        updatePay = {field: value for field,
+                     value in data.items() if field in valid_fields}
+        if len(updatePay) != len(valid_fields):
+            return jsonify({"message": "Missing fields"}), 400
+        updatePay.update({"methodId": generate_custom_id()})
+        mongo.db.wizard_profile.update_one(
+            {
+                "deviceId": device_id
+            },
+            {
+                "$push": {"paymentMethods": updatePay}
+            })
+    elif action == "remove":
+        methodId = data.get("methodId")
+        if not methodId:
+            return jsonify({"message": "Missing fields"}), 400
+        mongo.db.wizard_profile.update_one(
+            {
+                "deviceId": device_id
+            },
+            {
+                "$pull": {
+                    "paymentMethods": {"methodId": methodId}
+                }
+            })
+    else:
+        return jsonify({"message": "Invalid field"}), 400
+
+    return jsonify({"message": "Sucess"})
 
 
 if __name__ == "__main__":

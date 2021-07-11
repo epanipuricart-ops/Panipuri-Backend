@@ -93,8 +93,9 @@ def generate_custom_id():
     )
 
 
-def refresh_zoho_access_token():
+def refresh_zoho_access_token(force=False):
     if (
+        force or
         ZOHO_TOKEN["access_token"] == "" or
         time.time()-ZOHO_TOKEN["timestamp"] >= 1800
     ):
@@ -118,7 +119,6 @@ def send_data_to_zoho(clients):
         "Email": client.get("email"),
         "Phone": client.get("mobile")
     } for client in clients]
-    refresh_zoho_access_token()
     contacts = "https://www.zohoapis.in/crm/v2/Contacts"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
     data = {
@@ -138,6 +138,59 @@ def send_data_to_zoho(clients):
                 "email": client.get("email"),
                 "zohoId": response_record["details"]["id"]})
     mongo.db.zoho_customer.insert_many(zoho_customers)
+
+
+def send_estimate_mail(estimate_id, email):
+    if not estimate_id:
+        return
+    body = """
+    Dear Customer,
+    Thanks for your business enquiry.
+    The estimate is attached with this email.
+    We can get started if you send us your consent.
+    For any assistance you can reach us via email or phone.
+    Looking forward to hearing back from you.
+    """
+    requests.post(
+        "https://books.zoho.in/api/v3/estimates",
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        header={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        },
+        json={
+            "send_from_org_email_id": True,
+            "to_mail_ids": [
+                email
+            ],
+            "cc_mail_ids": [
+                "gyanaranjan7205@gmail.com", "jyotimay16@gmail.com"
+            ],
+            "subject": "Estimate Statement",
+            "body": body
+        })
+
+
+def create_zoho_estimate(customer_id):
+    response = requests.post(
+        "https://books.zoho.in/api/v3/estimates",
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        header={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        },
+        json={
+            "customer_id": customer_id,
+            "line_items": [
+                {
+                    "item_id": 221779000000917003
+                }
+            ]
+        }).json()
+    if response.get("code") == 0:
+        return response.get("estimate").get("estimate_id")
 
 
 @app.route('/franchisee/register/<path:path>', methods=['POST'])
@@ -168,7 +221,7 @@ def register(path):
         }
         try:
             mongo.db.clients.insert_one(doc)
-            # send_data_to_zoho(doc)
+            send_data_to_zoho([doc])
             return jsonify({
                 "title": doc['title'],
                 "firstName": doc['firstName'],
@@ -1246,19 +1299,18 @@ def updateBlog():
         except Exception:
             pass
         ext = photo.filename.lower().split(".")[-1]
-        if ext in ["jpg", "png"]:
-            hex_form = generate_custom_id()
-            enc_filename = "photo_" + hex_form + "." + ext
-            enc_filename = secure_filename(enc_filename)
-            try:
-                save_path = os.path.abspath(
-                    os.path.join(BLOG_PHOTO_FOLDER, enc_filename))
-                photo.save(save_path)
-                newBlog.update({"photo": enc_filename})
-            except Exception:
-                return jsonify({"message": "Some Error Occurred"}), 500
-        else:
+        if ext not in ["jpg", "png"]:
             return jsonify({"message": "Only JPG/PNG files allowed"}), 400
+        hex_form = generate_custom_id()
+        enc_filename = "photo_" + hex_form + "." + ext
+        enc_filename = secure_filename(enc_filename)
+        try:
+            save_path = os.path.abspath(
+                os.path.join(BLOG_PHOTO_FOLDER, enc_filename))
+            photo.save(save_path)
+            newBlog.update({"photo": enc_filename})
+        except Exception:
+            return jsonify({"message": "Some Error Occurred"}), 500
     if not newBlog:
         return jsonify({"message": "No changes done."})
     newBlog.update({"date": int(round(time.time() * 1000))})
@@ -1402,9 +1454,11 @@ def updateMenu(field):
     elif field == "cart":
         if not data.get("cartId"):
             return jsonify({"message": "No Cart ID sent"}), 400
-        valid_fields = ["isActive"]
+        valid_fields = ["isActive", "gst", "deliveryCharge", "flatDiscount"]
         updateCart = {field: value for field,
                       value in data.items() if field in valid_fields}
+        if not updateCart.get("isActive", True):
+            updateCart.update({"sid": []})
         mongo.db.menu.update_one(
             {
                 "cartId": data.get("cartId")
@@ -1631,6 +1685,10 @@ def addToFavourites():
             "models": modelUid
         }},
         upsert=True)
+    zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+    if not zohoId:
+        return jsonify({"message": "Could not send estimate"})
+    send_estimate_mail(createEstimate(zohoId.get("zohoId")), email)
     return jsonify({"message": "Success"})
 
 
@@ -1788,8 +1846,14 @@ def getSwitchStatus():
 #         {"exportedZoho": False}, {"$set": {"exportedZoho": True}})
 #     while record and len(records) < 100:
 #         records.append(record)
+#         record = mongo.db.clients.find_one_and_update(
+#             {"exportedZoho": False}, {"$set": {"exportedZoho": True}})
 #     if records:
 #         send_data_to_zoho(records)
+
+@scheduler.task('cron', id='zoho_token_refresh', minute='*/30')
+def zoho_token_refresh():
+    refresh_zoho_access_token(force=True)
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)

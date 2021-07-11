@@ -21,7 +21,9 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*",
+                    logger=True, engineio_logger=True)
+# socketio.init_app(app, cors_allowed_origins="*")
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
@@ -373,12 +375,15 @@ def placeOrder():
                         "itemId": "$menu.items.itemId",
                         "gst": 1,
                         "sid": 1,
+                        "isActive": 1,
                         "price": "$menu.items.price"
                     }
                 }
             ])
 
         data = list(data)
+        if not data[0]["isActive"]:
+            return jsonify({"message": "Restaurant Offline"}), 400
         extraData = {"subTotal": 0,
                      "gst": data[0]["gst"], "sid": data[0]["sid"]}
         for d in data:
@@ -431,13 +436,23 @@ def getOrderByTypeAndStatus():
     return jsonify({"message": "No status/type arguments sent"}), 400
 
 
+@socketio.on('connect')
+def connected():
+    print("SID is", request.sid)
+    emit("myresponse", {"status": "connected"})
+
+
 @socketio.on("registerSid")
 @cross_origin()
 def registerSidEvent(data):
     cartId = data.get("cartId")
+    print("CartID: ", cartId)
     if cartId:
         mongo.db.menu.update_one({"cartId": cartId}, {
-                                 "$set": {"sid": request.sid}})
+                                 "$push": {"sid": request.sid}})
+        emit("regResponse", {"status": "registered"})
+        return
+    emit("regResponse", {"status": "failed"})
 
 
 @socketio.on("getOrderByOrderId")
@@ -472,7 +487,8 @@ def allOrderStatusEvent(data):
 
 if __name__ == "__main__":
     print("starting...")
-    app.run(host=cfg.OrderFlask['HOST'],
-            port=cfg.OrderFlask['PORT'],
-            threaded=cfg.OrderFlask['THREADED'],
-            debug=True)
+    socketio.run(app,
+                 host=cfg.OrderFlask['HOST'],
+                 port=cfg.OrderFlask['PORT'],
+                 # threaded=cfg.OrderFlask['THREADED'],
+                 debug=False)
