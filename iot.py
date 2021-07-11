@@ -332,6 +332,34 @@ def getDeviceData():
         return jsonify({"message": "Authentication error"}), 401
 
 # route to fetch device data
+@app.route("/wizard/getDeviceData", methods=['GET', 'POST'])
+@cross_origin()
+def getWizardDeviceData():
+    uid = request.args.get('customerId')
+    if True:
+        data = mongo.db.devices.find_one({"uid": uid})
+        if data:
+            d = {}
+            if (data["activeState"] == 1) and (data["deviceState"] == 1):
+                d["status"] = 1
+            elif (data["activeState"] == 0) and (data["deviceState"] == 0):
+                d["status"] = 0
+            elif (data["activeState"] == 1) and (data["deviceState"] == 0):
+                d["status"] = 2
+            elif (data["activeState"] == 0) and (data["deviceState"] == 1):
+                d["status"] = 3
+            else:
+                d["status"] = 4
+            d["uid"] = data["uid"]
+            d["date"] = data["activeDate"]
+            d["address"] = data["address"]
+            d["type"] = data["type"]
+            d["owner"] = data["owner"]
+            d["settings"] = data["settings"]
+            d["mode"] = data["mode"]
+            return jsonify(d)
+        else:
+            return jsonify({"message": "Invalid Device Id"}), 403
 
 
 @app.route("/getSwitchStatus", methods=['GET', 'POST'])
@@ -511,7 +539,7 @@ def updateProfileWizard():
     return jsonify({"message": "Success"})
 
 
-@app.route("/wizard/updatePayment/<str:action>", methods=['POST'])
+@app.route("/wizard/updatePayment/<action>", methods=['POST'])
 @cross_origin()
 def updatePayment(action):
     data = request.json

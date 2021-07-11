@@ -337,6 +337,8 @@ def placeOrder():
         data["transactionId"] = ""
     createOrder = {field: value for field,
                    value in data.items() if field in valid_fields}
+    
+    items_arr = []
 
     if len(createOrder) == len(valid_fields):
         email = createOrder['customerEmail']
@@ -349,6 +351,7 @@ def placeOrder():
             itemsDict[item] = itemsDict.get(item, 0)+1
 
         data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
+        items_arr = data["items"]
         itemsList = list(itemsDict.keys())
         data = mongo.db.menu.aggregate(
             [
@@ -380,7 +383,6 @@ def placeOrder():
                     }
                 }
             ])
-
         data = list(data)
         if not data[0]["isActive"]:
             return jsonify({"message": "Restaurant Offline"}), 400
@@ -398,6 +400,11 @@ def placeOrder():
                 (1+extraData["gst"]/100)*extraData["subTotal"], 2)
         }
         createOrder.update(orderFields)
+        for ele in items_arr:
+            ele["itemName"] = "Hingoli"
+        createOrder["items"] = items_arr
+        createOrder["deliveryCharge"] = 0.0
+        createOrder["packingCharge"] = 0.0
         mongo.db.online_orders.insert_one(createOrder)
         createOrder.pop("_id")
         socketio.emit("receiveOrder", createOrder,
@@ -413,11 +420,25 @@ def updateOrderStatus():
     data = request.json
     orderId = data.get("orderId")
     status = data.get("status")
+    if status == 'pending':
+        deliveryCharge = float(data.get('deliveryCharge'))
+        packingCharge = float(data.get('packingCharge'))
+    else:
+        deliveryCharge = 0.0
+        packingCharge = 0.0
+
     if orderId and status:
+        order_data = mongo.db.online_orders.find_one({"orderId": orderId})
+        subTotal = order_data['subTotal']
+        gst = order_data['gst']
+        total = (subTotal + deliveryCharge + packingCharge)* (1+gst)
         mongo.db.online_orders.update_one(
             {"orderId": orderId},
             {"$set": {
-                "orderStatus": status
+                "orderStatus": status,
+                "total": total,
+                "packingCharge": packingCharge,
+                "deliveryCharge": deliveryCharge
             }})
         return jsonify({"message": "Success"})
     return jsonify({"message": "Missing fields"}), 400
