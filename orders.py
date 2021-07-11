@@ -337,7 +337,7 @@ def placeOrder():
         data["transactionId"] = ""
     createOrder = {field: value for field,
                    value in data.items() if field in valid_fields}
-    
+
     items_arr = []
 
     if len(createOrder) == len(valid_fields):
@@ -351,7 +351,6 @@ def placeOrder():
             itemsDict[item] = itemsDict.get(item, 0)+1
 
         data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
-        items_arr = data["items"]
         itemsList = list(itemsDict.keys())
         data = mongo.db.menu.aggregate(
             [
@@ -376,6 +375,7 @@ def placeOrder():
                     {
                         "_id": 0,
                         "itemId": "$menu.items.itemId",
+                        "itemName": "$menu.items.name",
                         "gst": 1,
                         "sid": 1,
                         "isActive": 1,
@@ -388,8 +388,12 @@ def placeOrder():
             return jsonify({"message": "Restaurant Offline"}), 400
         extraData = {"subTotal": 0,
                      "gst": data[0]["gst"], "sid": data[0]["sid"]}
+        items_arr = []
         for d in data:
-            extraData["subTotal"] += d["price"]*itemsDict.get(d["itemId"], 1)
+            qty = itemsDict.get(d["itemId"], 1)
+            extraData["subTotal"] += d["price"]*qty
+            items_arr.append(
+                {"itemId": d["itemId"], "itemName": d["itemName"], "qty": qty})
         orderFields = {
             "orderId": generate_custom_id(),
             "timestamp": int(round(time.time() * 1000)),
@@ -397,11 +401,9 @@ def placeOrder():
             "subTotal": extraData["subTotal"],
             "gst": extraData["gst"],
             "total": round(
-                (1+extraData["gst"]/100)*extraData["subTotal"], 2)
+                (1+extraData["gst"])*extraData["subTotal"], 2)
         }
         createOrder.update(orderFields)
-        for ele in items_arr:
-            ele["itemName"] = "Hingoli"
         createOrder["items"] = items_arr
         createOrder["deliveryCharge"] = 0.0
         createOrder["packingCharge"] = 0.0
@@ -431,7 +433,8 @@ def updateOrderStatus():
         order_data = mongo.db.online_orders.find_one({"orderId": orderId})
         subTotal = order_data['subTotal']
         gst = order_data['gst']
-        total = (subTotal + deliveryCharge + packingCharge)* (1+gst)
+        total = (subTotal + deliveryCharge + packingCharge) * (1+gst)
+        total = round(total, 2)
         mongo.db.online_orders.update_one(
             {"orderId": orderId},
             {"$set": {
