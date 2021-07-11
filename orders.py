@@ -21,7 +21,7 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
@@ -432,6 +432,7 @@ def getOrderByTypeAndStatus():
 
 
 @socketio.on("registerSid")
+@cross_origin()
 def registerSidEvent(data):
     cartId = data.get("cartId")
     if cartId:
@@ -440,6 +441,7 @@ def registerSidEvent(data):
 
 
 @socketio.on("getOrderByOrderId")
+@cross_origin()
 def getOrderByOrderIdEvent(data):
     orderId = data.get("orderId")
     if orderId:
@@ -452,6 +454,7 @@ def getOrderByOrderIdEvent(data):
 
 
 @socketio.on("allOrderStatus")
+@cross_origin()
 def allOrderStatusEvent(data):
     token = data.get("token")
     clientEmail = jwt.decode(token,

@@ -1781,15 +1781,15 @@ def getSwitchStatus():
         return jsonify({"message": "Invalid Device Id"}), 403
 
 
-@scheduler.task('cron', id='zoho_crm_create', minute='*/30')
-def zoho_crm_create():
-    records = []
-    record = mongo.db.clients.find_one_and_update(
-        {"exportedZoho": False}, {"$set": {"exportedZoho": True}})
-    while record and len(records) < 100:
-        records.append(record)
-    if records:
-        send_data_to_zoho(records)
+# @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
+# def zoho_crm_create():
+#     records = []
+#     record = mongo.db.clients.find_one_and_update(
+#         {"exportedZoho": False}, {"$set": {"exportedZoho": True}})
+#     while record and len(records) < 100:
+#         records.append(record)
+#     if records:
+#         send_data_to_zoho(records)
 
 
 @scheduler.task('cron', id='move_pdf', minute=0, hour=0)
