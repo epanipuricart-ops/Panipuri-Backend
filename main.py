@@ -623,6 +623,7 @@ def getCosting():
             d['uid'] = ele['uid']
             d['modelType'] = ele['modelType']
             d['extension'] = ele['extension']
+            d['model_image'] = ele['model_image']
             arr.append(d)
         return jsonify({"items": arr})
 
@@ -1662,7 +1663,7 @@ def getFavourites():
     favourites = mongo.db.shopping_favourites.find_one(
         {"email": email}, {"_id": 0})
     if not favourites:
-        return jsonify({"message": "Cart Empty"}), 400
+        return jsonify({"models": []})
     models = {"models": list(set(favourites.get("models", [])))}
     return jsonify(models)
 

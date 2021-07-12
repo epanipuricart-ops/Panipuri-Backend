@@ -426,9 +426,18 @@ def updateOrderStatus():
     data = request.json
     orderId = data.get("orderId")
     status = data.get("status")
+    order_data = mongo.db.online_orders.find_one({"orderId": orderId}, {"_id": 0})
     if status == 'pending':
         deliveryCharge = float(data.get('deliveryCharge'))
         packingCharge = float(data.get('packingCharge'))
+        clientEmail = order_data['customerEmail']
+        sid_list = mongo.db.customerSid.find_one({"email": clientEmail })
+        socketio.emit("receiveEditedOrder", order_data,
+                      json=True, room=sid_list)
+    elif status == 'confirmed':
+        sid_list = mongo.db.menu.find_one({"cartId": order_data["cartId"]})["sid"]
+        socketio.emit("receiveConfirmedOrder", order_data,
+                      json=True, room=sid_list)
     else:
         deliveryCharge = 0.0
         packingCharge = 0.0
@@ -523,6 +532,23 @@ def registerSidEvent(data):
         emit("regResponse", {"status": "registered"})
         return
     emit("regResponse", {"status": "failed"})
+
+@socketio.on("registerSidByCustomer")
+@cross_origin()
+def registerSidByCustomer(data):
+    token = data.get("token")
+    print("Token: ", token)
+    clientEmail = jwt.decode(token,
+                             options={
+                                 "verify_signature": False,
+                                 "verify_aud": False
+                             })['email']
+    if clientEmail:
+        mongo.db.customerSid.update_one({"email": clientEmail}, {
+                                 "$push": {"sid": request.sid}})
+        emit("customerResponse", {"status": "registered"})
+        return jsonify({"message":"success"})
+    emit("customerResponse", {"status": "failed"})
 
 
 @socketio.on("getOrderByOrderId")
