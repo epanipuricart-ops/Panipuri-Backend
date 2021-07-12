@@ -623,6 +623,7 @@ def getCosting():
             d['uid'] = ele['uid']
             d['modelType'] = ele['modelType']
             d['extension'] = ele['extension']
+            d['model_image'] = ele['model_image']
             arr.append(d)
         return jsonify({"items": arr})
 
@@ -1662,7 +1663,7 @@ def getFavourites():
     favourites = mongo.db.shopping_favourites.find_one(
         {"email": email}, {"_id": 0})
     if not favourites:
-        return jsonify({"message": "Cart Empty"}), 400
+        return jsonify({"models": []})
     models = {"models": list(set(favourites.get("models", [])))}
     return jsonify(models)
 
@@ -1688,7 +1689,7 @@ def addToFavourites():
     zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
     if not zohoId:
         return jsonify({"message": "Could not send estimate"})
-    send_estimate_mail(createEstimate(zohoId.get("zohoId")), email)
+    send_estimate_mail(create_zoho_estimate(zohoId.get("zohoId")), email)
     return jsonify({"message": "Success"})
 
 
@@ -1711,20 +1712,6 @@ def removeFromFavourites():
         }})
     return jsonify({"message": "Success"})
 
-
-@app.route('/franchisee/createEstimate', methods=['POST'])
-@cross_origin()
-@verify_token
-def createEstimate():
-    token = request.headers['Authorization']
-    decoded = jwt.decode(token,
-                         options={
-                             "verify_signature": False,
-                             "verify_aud": False
-                         })
-    email = decoded['email']
-    modelUid = request.json.get("uid")
-    return jsonify({"message": "Success"})
 
 
 @app.route('/upload', methods=['GET', 'POST'])
