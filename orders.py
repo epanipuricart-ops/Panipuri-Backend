@@ -1,4 +1,4 @@
-from flask import (Flask, request, jsonify)
+from flask import (Flask, request, jsonify, send_file)
 from flask_pymongo import PyMongo
 from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, emit
@@ -10,9 +10,12 @@ import json
 import time
 import os
 import binascii
+from datetime import datetime
 from functools import wraps
 from config import config as cfg
 
+
+INVOICE_PDF_FOLDER = 'public/invoice_pdf'
 
 app = Flask(__name__, static_url_path='')
 
@@ -393,7 +396,8 @@ def placeOrder():
             qty = itemsDict.get(d["itemId"], 1)
             extraData["subTotal"] += d["price"]*qty
             items_arr.append(
-                {"itemId": d["itemId"], "itemName": d["itemName"], "qty": qty})
+                {"itemId": d["itemId"], "itemName": d["itemName"],
+                 "price": d["price"], "qty": qty})
         orderFields = {
             "orderId": generate_custom_id(),
             "timestamp": int(round(time.time() * 1000)),
@@ -458,6 +462,48 @@ def getOrderByTypeAndStatus():
             {"orderType": _type, "orderStatus": status}, {"_id": 0})
         return jsonify({"orders": list(orders)})
     return jsonify({"message": "No status/type arguments sent"}), 400
+
+
+@app.route('/orderOnline/generateInvoice', methods=['GET'])
+@cross_origin()
+@verify_token
+def generateInvoice():
+    orderId = request.args.get("orderId")
+    save_path = os.path.join(INVOICE_PDF_FOLDER, orderId+".pdf")
+    if os.path.isfile(save_path):
+        return send_file(save_path, as_attachment=True)
+    order_data = mongo.db.online_orders.find_one(
+        {"orderId": orderId}, {"_id": 0})
+    if order_data:
+        device_id = mongo.db.device_ids.find_one(
+            {"device_id": order_data.get("cartId")})
+        items_format = r"|itemName| & \centering |qty| & \centering \rupee |price| & \multicolumn{1}{r}{ \rupee |totalPrice| }\\"
+        items_list = []
+        for item in order_data["items"]:
+            item_str = items_format
+            item.update({"totalPrice": item["qty"]*item["price"]})
+            for k, v in item.items():
+                item_str.replace("|"+k+"|", v)
+            items_list.append(item_str+"\n\\\\\n")
+        order_data.update(
+            {
+                "location": device_id.get("location"),
+                "gst": sum(
+                    order_data[key]
+                    for key in ["subTotal", "deliveryCharge", "packingCharge"]
+                )
+                * order_data["gst"],
+                "timestamp": datetime.fromtimestamp(
+                    order_data["timestamp"]//1000
+                ).strftime('%d %B %Y, %I:%M %p'),
+                "items": "".join(items_list)
+            }
+        )
+        latex_data = open("invoice_template.tex").read()
+
+        for item in order_data:
+            for k, v in item.items():
+                latex_data.replace("|"+k+"|", v)
 
 
 @socketio.on('connect')
