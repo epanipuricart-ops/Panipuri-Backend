@@ -13,6 +13,7 @@ import binascii
 from datetime import datetime
 from functools import wraps
 from config import config as cfg
+import subprocess
 
 
 INVOICE_PDF_FOLDER = 'public/invoice_pdf'
@@ -426,16 +427,18 @@ def updateOrderStatus():
     data = request.json
     orderId = data.get("orderId")
     status = data.get("status")
-    order_data = mongo.db.online_orders.find_one({"orderId": orderId}, {"_id": 0})
+    order_data = mongo.db.online_orders.find_one(
+        {"orderId": orderId}, {"_id": 0})
     if status == 'pending':
         deliveryCharge = float(data.get('deliveryCharge'))
         packingCharge = float(data.get('packingCharge'))
         clientEmail = order_data['customerEmail']
-        sid_list = mongo.db.customerSid.find_one({"email": clientEmail })
+        sid_list = mongo.db.customerSid.find_one({"email": clientEmail})
         socketio.emit("receiveEditedOrder", order_data,
                       json=True, room=sid_list)
     elif status == 'confirmed':
-        sid_list = mongo.db.menu.find_one({"cartId": order_data["cartId"]})["sid"]
+        sid_list = mongo.db.menu.find_one(
+            {"cartId": order_data["cartId"]})["sid"]
         socketio.emit("receiveConfirmedOrder", order_data,
                       json=True, room=sid_list)
     else:
@@ -513,6 +516,17 @@ def generateInvoice():
         for item in order_data:
             for k, v in item.items():
                 latex_data.replace("|"+k+"|", v)
+        tmp_file = os.path.join(
+            INVOICE_PDF_FOLDER, generate_custom_id()+".tex")
+        with open(tmp_file, "w") as lfile:
+            lfile.write(tmp_file)
+        process = subprocess.Popen([
+            'latex',   # Or maybe 'C:\\Program Files\\MikTex\\miktex\\bin\\latex.exe
+            '-output-format=pdf',
+            '-job-name=' + save_path, tmp_file])
+        process.wait()
+        os.remove(tmp_file)
+        return send_file(save_path, as_attachment=True)
 
 
 @socketio.on('connect')
@@ -533,6 +547,7 @@ def registerSidEvent(data):
         return
     emit("regResponse", {"status": "failed"})
 
+
 @socketio.on("registerSidByCustomer")
 @cross_origin()
 def registerSidByCustomer(data):
@@ -545,9 +560,9 @@ def registerSidByCustomer(data):
                              })['email']
     if clientEmail:
         mongo.db.customerSid.update_one({"email": clientEmail}, {
-                                 "$push": {"sid": request.sid}})
+            "$push": {"sid": request.sid}})
         emit("customerResponse", {"status": "registered"})
-        return jsonify({"message":"success"})
+        return jsonify({"message": "success"})
     emit("customerResponse", {"status": "failed"})
 
 

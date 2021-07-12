@@ -1,0 +1,67 @@
+
+\documentclass{letter}
+\usepackage[utf8]{inputenc}
+\usepackage[colorlinks]{hyperref}
+\usepackage[left=1in,top=0.5in,right=1in,bottom=1in]{geometry} % Document margins
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{array}
+\usepackage{tfrupee}
+\usepackage[table,xcdraw]{xcolor}
+
+
+\begin{document}
+\definecolor{Gray}{gray}{0.9}
+\thispagestyle{empty}
+
+\begin{center}
+  \includegraphics[height=1.98cm]{logo.png}
+\end{center}
+\begin{center}
+\text{|location|}
+\end{center}
+\vspace{0.2 cm}
+\hrule
+
+\vspace{0.5 cm}
+
+
+\begin{tabularx}{\linewidth}{l X l}
+  \textbf{INVOICE FOR}        &   & \textbf{Order ID}: \text{|orderId|} \\
+  \text{|customerName|}          &   & \textbf{Time}: |timestamp|                        \\
+  \text{|customerPhone|}           &   &                           \\
+  \text{|customerEmail|} &   &                     \\
+  \text{|deliveryAddress|} & & \\
+  
+\end{tabularx}
+
+\vspace{0.5 cm}
+
+% Table of fees
+\begin{tabularx}{\linewidth}{l X X X l}
+  %   \hline
+  \rowcolor{Gray}
+  & & & \\
+  \rowcolor{Gray}
+  \centering{\bf{Item}}   & \centering{\bf{Quantity}} & \centering{\bf{Unit Price}} & \multicolumn{1}{r}{\bf{Total Price}} \\
+  \rowcolor{Gray}
+  & & & \\
+  \hline
+  \\
+  |items|
+  \hline
+  \hline
+  \\
+\end{tabularx}
+\begin{tabularx}{\linewidth}{l X r}
+  \textbf{Sub Total}:        & & \rupee |subTotal| \\
+  \textbf{GST}:        & & \rupee |gst|  \\
+  \textbf{Packing Charges}:  & & \rupee |packingCharge|  \\
+  \textbf{Delivery Charge}:  & & \rupee |deliveryCharge|  \\
+  \textbf{Total}:            & & \rupee |total| \\
+  \\
+  \hline
+  \hline
+\end{tabularx}
+\end{document}
