@@ -478,9 +478,10 @@ def getOrderByTypeAndStatus():
 
 @app.route('/orderOnline/generateInvoice', methods=['GET'])
 @cross_origin()
-@verify_token
 def generateInvoice():
     orderId = request.args.get("orderId")
+    if not orderId:
+        return {"message": "No ID Sent"}
     save_path = os.path.join(INVOICE_PDF_FOLDER, orderId+".pdf")
     if os.path.isfile(save_path):
         return send_file(save_path, as_attachment=True)
@@ -489,13 +490,13 @@ def generateInvoice():
     if order_data:
         device_id = mongo.db.device_ids.find_one(
             {"device_id": order_data.get("cartId")})
-        items_format = r"|itemName| & \centering |qty| & \centering \rupee |price| & \multicolumn{1}{r}{ \rupee |totalPrice| }\\"
+        items_format = r"|itemName| & \centering |qty| & \centering RS. |price| & \multicolumn{1}{r}{ RS. |totalPrice| }\\"
         items_list = []
         for item in order_data["items"]:
             item_str = items_format
             item.update({"totalPrice": item["qty"]*item["price"]})
             for k, v in item.items():
-                item_str.replace("|"+k+"|", v)
+                item_str = item_str.replace("|"+k+"|", str(v))
             items_list.append(item_str+"\n\\\\\n")
         order_data.update(
             {
@@ -513,20 +514,25 @@ def generateInvoice():
         )
         latex_data = open("invoice_template.tex").read()
 
-        for item in order_data:
-            for k, v in item.items():
-                latex_data.replace("|"+k+"|", v)
+        for k, v in order_data.items():
+            latex_data = latex_data.replace("|"+k+"|", str(v))
         tmp_file = os.path.join(
             INVOICE_PDF_FOLDER, generate_custom_id()+".tex")
         with open(tmp_file, "w") as lfile:
-            lfile.write(tmp_file)
+            lfile.write(latex_data)
         process = subprocess.Popen([
-            'latex',   # Or maybe 'C:\\Program Files\\MikTex\\miktex\\bin\\latex.exe
+            r'C:\Program Files\MiKTeX\miktex\bin\x64\latex.exe',
             '-output-format=pdf',
-            '-job-name=' + save_path, tmp_file])
+            '-job-name=' + save_path[:-4], tmp_file])
         process.wait()
-        os.remove(tmp_file)
+        try:
+            os.remove(tmp_file)
+            os.remove(save_path[:-3]+"aux")
+            os.remove(save_path[:-3]+"log")
+        except Exception as e:
+            print(e)
         return send_file(save_path, as_attachment=True)
+    return {"message": "Invalid ID"}
 
 
 @socketio.on('connect')
