@@ -172,7 +172,7 @@ def send_estimate_mail(estimate_id, email):
         })
 
 
-def create_zoho_estimate(customer_id):
+def create_zoho_estimate(customer_id, item_id):
     response = requests.post(
         "https://books.zoho.in/api/v3/estimates",
         params={
@@ -185,7 +185,7 @@ def create_zoho_estimate(customer_id):
             "customer_id": customer_id,
             "line_items": [
                 {
-                    "item_id": 221779000000917003
+                    "item_id": item_id
                 }
             ]
         }).json()
@@ -1686,9 +1686,12 @@ def addToFavourites():
         }},
         upsert=True)
     zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
-    if not zohoId:
+    itemId = mongo.db.costing.find_one({"uid": modelUid})
+    if not zohoId or not itemId:
         return jsonify({"message": "Could not send estimate"})
-    send_estimate_mail(createEstimate(zohoId.get("zohoId")), email)
+    send_estimate_mail(
+        create_zoho_estimate(zohoId.get("zohoId"), itemId.get("zoho_itemid")),
+        email)
     return jsonify({"message": "Success"})
 
 
@@ -1709,21 +1712,6 @@ def removeFromFavourites():
         {"$pull": {
             "models": modelUid
         }})
-    return jsonify({"message": "Success"})
-
-
-@app.route('/franchisee/createEstimate', methods=['POST'])
-@cross_origin()
-@verify_token
-def createEstimate():
-    token = request.headers['Authorization']
-    decoded = jwt.decode(token,
-                         options={
-                             "verify_signature": False,
-                             "verify_aud": False
-                         })
-    email = decoded['email']
-    modelUid = request.json.get("uid")
     return jsonify({"message": "Success"})
 
 
