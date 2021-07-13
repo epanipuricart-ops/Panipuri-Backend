@@ -1,4 +1,4 @@
-from flask import (Flask, request, jsonify, send_file)
+from flask import (Flask, request, jsonify, send_file, send_from_directory)
 from flask_pymongo import PyMongo
 from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, emit
@@ -429,51 +429,40 @@ def updateOrderStatus():
     status = data.get("status")
     order_data = mongo.db.online_orders.find_one(
         {"orderId": orderId}, {"_id": 0})
-    if status == 'pending':
-        deliveryCharge = float(data.get('deliveryCharge'))
-        packingCharge = float(data.get('packingCharge'))
-        clientEmail = order_data['customerEmail']
-        sid_list = mongo.db.customerSid.find_one({"email": clientEmail})
-        subTotal = order_data['subTotal']
-        gst = order_data['gst']
-        total = (subTotal + deliveryCharge + packingCharge) * (1+gst)
-        total = round(total, 2)
-        mongo.db.online_orders.update_one(
-            {"orderId": orderId},
-            {"$set": {
-                "orderStatus": status,
-                "total": total,
-                "packingCharge": packingCharge,
-                "deliveryCharge": deliveryCharge
-            }})
-        order_data = mongo.db.online_orders.find_one(
-        {"orderId": orderId}, {"_id": 0})
-        socketio.emit("receiveEditedOrder", order_data,
-                      json=True, room=sid_list)
-    elif status == 'confirmed':
-        sid_list = mongo.db.menu.find_one(
-            {"cartId": order_data["cartId"]})["sid"]
-        socketio.emit("receiveConfirmedOrder", order_data,
-                      json=True, room=sid_list)
-    else:
-        deliveryCharge = 0.0
-        packingCharge = 0.0
-
+    deliveryCharge = float(data.get('deliveryCharge'))
+    packingCharge = float(data.get('packingCharge'))
     if orderId and status:
-        order_data = mongo.db.online_orders.find_one({"orderId": orderId})
-        subTotal = order_data['subTotal']
-        gst = order_data['gst']
-        total = (subTotal + deliveryCharge + packingCharge) * (1+gst)
-        total = round(total, 2)
-        mongo.db.online_orders.update_one(
-            {"orderId": orderId},
-            {"$set": {
-                "orderStatus": status,
-                "total": total,
-                "packingCharge": packingCharge,
-                "deliveryCharge": deliveryCharge
-            }})
-        return jsonify({"message": "Success"})
+        if status == 'pending':
+            clientEmail = order_data['customerEmail']
+            sid_list = mongo.db.customer_sid.find_one({"email": clientEmail})
+            subTotal = order_data['subTotal']
+            gst = order_data['gst']
+            total = (subTotal + deliveryCharge + packingCharge) * (1+gst)
+            total = round(total, 2)
+            mongo.db.online_orders.update_one(
+                {"orderId": orderId},
+                {"$set": {
+                    "orderStatus": status,
+                    "total": total,
+                    "packingCharge": packingCharge,
+                    "deliveryCharge": deliveryCharge
+                }})
+            order_data = mongo.db.online_orders.find_one(
+                {"orderId": orderId}, {"_id": 0})
+            socketio.emit("receiveEditedOrder", order_data,
+                          json=True, room=sid_list)
+        elif status == 'confirmed':
+            sid_list = mongo.db.menu.find_one(
+                {"cartId": order_data["cartId"]})["sid"]
+            socketio.emit("receiveConfirmedOrder", order_data,
+                          json=True, room=sid_list)
+        else:
+            mongo.db.online_orders.update_one(
+                {"orderId": orderId},
+                {"$set": {
+                    "orderStatus": status
+                }})
+            return jsonify({"message": "Success"})
     return jsonify({"message": "Missing fields"}), 400
 
 
@@ -495,10 +484,10 @@ def getOrderByTypeAndStatus():
 def generateInvoice():
     orderId = request.args.get("orderId")
     if not orderId:
-        return {"message":"No ID Sent"}
+        return {"message": "No ID Sent"}
     save_path = os.path.join(INVOICE_PDF_FOLDER, orderId+".pdf")
     if os.path.isfile(save_path):
-        return send_file(save_path, as_attachment=True)
+        return send_from_directory(INVOICE_PDF_FOLDER, orderId+".pdf")
     order_data = mongo.db.online_orders.find_one(
         {"orderId": orderId}, {"_id": 0})
     if order_data:
@@ -528,7 +517,7 @@ def generateInvoice():
         )
         latex_data = open("invoice_template.tex").read()
 
-        for k,v in order_data.items():
+        for k, v in order_data.items():
             latex_data = latex_data.replace("|"+k+"|", str(v))
         tmp_file = os.path.join(
             INVOICE_PDF_FOLDER, generate_custom_id()+".tex")
@@ -545,13 +534,90 @@ def generateInvoice():
             os.remove(save_path[:-3]+"log")
         except Exception as e:
             print(e)
-        return send_file(save_path, as_attachment=True)
-    return {"message":"Invalid ID"}
+        return send_from_directory(INVOICE_PDF_FOLDER, orderId+".pdf")
+    return jsonify({"message": "Invalid ID"})
+
+
+@app.route('/orderOnline/getAddress', methods=['GET'])
+@cross_origin()
+@verify_token
+def getAddress():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    address = mongo.db.address_book.find_one({"email": email})
+    if address:
+        return jsonify({"address": address.pop("address")})
+    return jsonify({"message": "No address saved"})
+
+
+@app.route('/orderOnline/updateAddress/<field>', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateAddress(field):
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    if field == "add":
+        address = request.json.get("address")
+        mongo.db.address_book.update_one(
+            {"email": email},
+            {
+                "$push":
+                {
+                    "address":
+                    {
+                        "addressId": generate_custom_id(),
+                        "addressData": address
+                    }
+                }
+            },
+            upsert=True
+        )
+    elif field == "update":
+        address = request.json.get("address")
+        addressId = request.json.get("addressId")
+        mongo.db.address_book.update_one(
+            {
+                "email": email,
+                "address.addressId": addressId
+            },
+            {
+                "$set": {
+                    "address.$.addressData": address
+                }
+            }
+        )
+    elif field == "remove":
+        addressId = request.json.get("addressId")
+        mongo.db.address_book.update_one(
+            {
+                "email": email,
+            },
+            {
+                "$pull": {
+                    "address": {"addressId": addressId}
+                }
+            }
+        )
+    else:
+        return jsonify({"message": "Invalid Data"})
+    return jsonify({"message": "Success"})
+
 
 @socketio.on('connect')
 def connected():
     print("SID is", request.sid)
     emit("myresponse", {"status": "connected"})
+    return {}
 
 
 @socketio.on("registerSid")
@@ -563,8 +629,9 @@ def registerSidEvent(data):
         mongo.db.menu.update_one({"cartId": cartId}, {
                                  "$push": {"sid": request.sid}})
         emit("regResponse", {"status": "registered"})
-        return
+        return {}
     emit("regResponse", {"status": "failed"})
+    return {}
 
 
 @socketio.on("registerSidByCustomer")
@@ -581,8 +648,9 @@ def registerSidByCustomer(data):
         mongo.db.customer_sid.update_one({"email": clientEmail}, {
             "$push": {"sid": request.sid}})
         emit("customerResponse", {"status": "registered"})
-        return jsonify({"message": "success"})
+        return {}
     emit("customerResponse", {"status": "failed"})
+    return {}
 
 
 @socketio.on("getOrderByOrderId")
@@ -594,8 +662,9 @@ def getOrderByOrderIdEvent(data):
             {"orderId": orderId},
             {"_id": 0})
         emit("getOrderByOrderId", newOrders, json=True)
-        return
+        return {}
     emit("getOrderByOrderId", {"message": "No orderId sent"})
+    return {}
 
 
 @socketio.on("allOrderStatus")
@@ -611,8 +680,9 @@ def allOrderStatusEvent(data):
         orders = mongo.db.online_orders.find(
             {"customerEmail": clientEmail}, {"_id": 0})
         emit("allOrderStatus", {"orders": list(orders)}, json=True)
-        return
+        return {}
     emit("allOrderStatus", {"message": "No clientEmail sent"})
+    return {}
 
 
 if __name__ == "__main__":
