@@ -1,4 +1,4 @@
-from flask import (Flask, request, jsonify)
+from flask import (Flask, request, jsonify, send_file)
 from flask_pymongo import PyMongo
 from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, emit
@@ -10,9 +10,13 @@ import json
 import time
 import os
 import binascii
+from datetime import datetime
 from functools import wraps
 from config import config as cfg
+import subprocess
 
+
+INVOICE_PDF_FOLDER = 'public/invoice_pdf'
 
 app = Flask(__name__, static_url_path='')
 
@@ -337,7 +341,7 @@ def placeOrder():
         data["transactionId"] = ""
     createOrder = {field: value for field,
                    value in data.items() if field in valid_fields}
-    
+
     items_arr = []
 
     if len(createOrder) == len(valid_fields):
@@ -351,7 +355,6 @@ def placeOrder():
             itemsDict[item] = itemsDict.get(item, 0)+1
 
         data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
-        items_arr = data["items"]
         itemsList = list(itemsDict.keys())
         data = mongo.db.menu.aggregate(
             [
@@ -376,6 +379,7 @@ def placeOrder():
                     {
                         "_id": 0,
                         "itemId": "$menu.items.itemId",
+                        "itemName": "$menu.items.name",
                         "gst": 1,
                         "sid": 1,
                         "isActive": 1,
@@ -388,8 +392,13 @@ def placeOrder():
             return jsonify({"message": "Restaurant Offline"}), 400
         extraData = {"subTotal": 0,
                      "gst": data[0]["gst"], "sid": data[0]["sid"]}
+        items_arr = []
         for d in data:
-            extraData["subTotal"] += d["price"]*itemsDict.get(d["itemId"], 1)
+            qty = itemsDict.get(d["itemId"], 1)
+            extraData["subTotal"] += d["price"]*qty
+            items_arr.append(
+                {"itemId": d["itemId"], "itemName": d["itemName"],
+                 "price": d["price"], "qty": qty})
         orderFields = {
             "orderId": generate_custom_id(),
             "timestamp": int(round(time.time() * 1000)),
@@ -397,11 +406,9 @@ def placeOrder():
             "subTotal": extraData["subTotal"],
             "gst": extraData["gst"],
             "total": round(
-                (1+extraData["gst"]/100)*extraData["subTotal"], 2)
+                (1+extraData["gst"])*extraData["subTotal"], 2)
         }
         createOrder.update(orderFields)
-        for ele in items_arr:
-            ele["itemName"] = "Hingoli"
         createOrder["items"] = items_arr
         createOrder["deliveryCharge"] = 0.0
         createOrder["packingCharge"] = 0.0
@@ -420,16 +427,32 @@ def updateOrderStatus():
     data = request.json
     orderId = data.get("orderId")
     status = data.get("status")
-    order_data = mongo.db.online_orders.find_one({"orderId": orderId}, {"_id": 0})
+    order_data = mongo.db.online_orders.find_one(
+        {"orderId": orderId}, {"_id": 0})
     if status == 'pending':
         deliveryCharge = float(data.get('deliveryCharge'))
         packingCharge = float(data.get('packingCharge'))
         clientEmail = order_data['customerEmail']
-        sid_list = mongo.db.customerSid.find_one({"email": clientEmail })
+        sid_list = mongo.db.customerSid.find_one({"email": clientEmail})
+        subTotal = order_data['subTotal']
+        gst = order_data['gst']
+        total = (subTotal + deliveryCharge + packingCharge) * (1+gst)
+        total = round(total, 2)
+        mongo.db.online_orders.update_one(
+            {"orderId": orderId},
+            {"$set": {
+                "orderStatus": status,
+                "total": total,
+                "packingCharge": packingCharge,
+                "deliveryCharge": deliveryCharge
+            }})
+        order_data = mongo.db.online_orders.find_one(
+        {"orderId": orderId}, {"_id": 0})
         socketio.emit("receiveEditedOrder", order_data,
                       json=True, room=sid_list)
     elif status == 'confirmed':
-        sid_list = mongo.db.menu.find_one({"cartId": order_data["cartId"]})["sid"]
+        sid_list = mongo.db.menu.find_one(
+            {"cartId": order_data["cartId"]})["sid"]
         socketio.emit("receiveConfirmedOrder", order_data,
                       json=True, room=sid_list)
     else:
@@ -440,7 +463,8 @@ def updateOrderStatus():
         order_data = mongo.db.online_orders.find_one({"orderId": orderId})
         subTotal = order_data['subTotal']
         gst = order_data['gst']
-        total = (subTotal + deliveryCharge + packingCharge)* (1+gst)
+        total = (subTotal + deliveryCharge + packingCharge) * (1+gst)
+        total = round(total, 2)
         mongo.db.online_orders.update_one(
             {"orderId": orderId},
             {"$set": {
@@ -466,6 +490,64 @@ def getOrderByTypeAndStatus():
     return jsonify({"message": "No status/type arguments sent"}), 400
 
 
+@app.route('/orderOnline/generateInvoice', methods=['GET'])
+@cross_origin()
+def generateInvoice():
+    orderId = request.args.get("orderId")
+    if not orderId:
+        return {"message":"No ID Sent"}
+    save_path = os.path.join(INVOICE_PDF_FOLDER, orderId+".pdf")
+    if os.path.isfile(save_path):
+        return send_file(save_path, as_attachment=True)
+    order_data = mongo.db.online_orders.find_one(
+        {"orderId": orderId}, {"_id": 0})
+    if order_data:
+        device_id = mongo.db.device_ids.find_one(
+            {"device_id": order_data.get("cartId")})
+        items_format = r"|itemName| & \centering |qty| & \centering RS. |price| & \multicolumn{1}{r}{ RS. |totalPrice| }\\"
+        items_list = []
+        for item in order_data["items"]:
+            item_str = items_format
+            item.update({"totalPrice": item["qty"]*item["price"]})
+            for k, v in item.items():
+                item_str = item_str.replace("|"+k+"|", str(v))
+            items_list.append(item_str+"\n\\\\\n")
+        order_data.update(
+            {
+                "location": device_id.get("location"),
+                "gst": sum(
+                    order_data[key]
+                    for key in ["subTotal", "deliveryCharge", "packingCharge"]
+                )
+                * order_data["gst"],
+                "timestamp": datetime.fromtimestamp(
+                    order_data["timestamp"]//1000
+                ).strftime('%d %B %Y, %I:%M %p'),
+                "items": "".join(items_list)
+            }
+        )
+        latex_data = open("invoice_template.tex").read()
+
+        for k,v in order_data.items():
+            latex_data = latex_data.replace("|"+k+"|", str(v))
+        tmp_file = os.path.join(
+            INVOICE_PDF_FOLDER, generate_custom_id()+".tex")
+        with open(tmp_file, "w") as lfile:
+            lfile.write(latex_data)
+        process = subprocess.Popen([
+            r'C:\Program Files\MiKTeX\miktex\bin\x64\latex.exe',
+            '-output-format=pdf',
+            '-job-name=' + save_path[:-4], tmp_file])
+        process.wait()
+        try:
+            os.remove(tmp_file)
+            os.remove(save_path[:-3]+"aux")
+            os.remove(save_path[:-3]+"log")
+        except Exception as e:
+            print(e)
+        return send_file(save_path, as_attachment=True)
+    return {"message":"Invalid ID"}
+
 @socketio.on('connect')
 def connected():
     print("SID is", request.sid)
@@ -484,6 +566,7 @@ def registerSidEvent(data):
         return
     emit("regResponse", {"status": "failed"})
 
+
 @socketio.on("registerSidByCustomer")
 @cross_origin()
 def registerSidByCustomer(data):
@@ -495,10 +578,10 @@ def registerSidByCustomer(data):
                                  "verify_aud": False
                              })['email']
     if clientEmail:
-        mongo.db.customerSid.update_one({"email": clientEmail}, {
-                                 "$push": {"sid": request.sid}})
+        mongo.db.customer_sid.update_one({"email": clientEmail}, {
+            "$push": {"sid": request.sid}})
         emit("customerResponse", {"status": "registered"})
-        return jsonify({"message":"success"})
+        return jsonify({"message": "success"})
     emit("customerResponse", {"status": "failed"})
 
 
