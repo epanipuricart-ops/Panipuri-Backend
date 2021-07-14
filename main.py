@@ -1771,6 +1771,29 @@ def removeFromFavourites():
     return jsonify({"message": "Success"})
 
 
+@app.route('/franchisee/sendSalesOrder', methods=['POST'])
+@cross_origin()
+@verify_token
+def sendSalesOrder():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    modelUid = request.json.get("uid")
+    zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+    itemId = mongo.db.costing.find_one({"uid": modelUid})
+    if not zohoId or not itemId:
+        return jsonify({"message": "Could not send salesorder"})
+    send_sales_mail(
+        create_zoho_sales_order(zohoId.get("zohoId"),
+                                itemId.get("zoho_itemid")),
+        email)
+    return jsonify({"message": "Success"})
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 @cross_origin()
 def upload():
