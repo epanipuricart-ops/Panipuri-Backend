@@ -151,12 +151,12 @@ def send_estimate_mail(estimate_id, email):
     For any assistance you can reach us via email or phone.
     Looking forward to hearing back from you.
     """
-    requests.post(
-        "https://books.zoho.in/api/v3/estimates",
+    return requests.post(
+        "https://books.zoho.in/api/v3/estimates/"+estimate_id+"/email",
         params={
             "organization_id": cfg.ZohoConfig.get("organization_id")
         },
-        header={
+        headers={
             "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
         },
         json={
@@ -169,7 +169,7 @@ def send_estimate_mail(estimate_id, email):
             ],
             "subject": "Estimate Statement",
             "body": body
-        })
+        }).json()
 
 
 def create_zoho_estimate(customer_id, item_id):
@@ -178,7 +178,7 @@ def create_zoho_estimate(customer_id, item_id):
         params={
             "organization_id": cfg.ZohoConfig.get("organization_id")
         },
-        header={
+        headers={
             "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
         },
         json={
@@ -191,6 +191,61 @@ def create_zoho_estimate(customer_id, item_id):
         }).json()
     if response.get("code") == 0:
         return response.get("estimate").get("estimate_id")
+
+
+def send_sales_mail(salesorder_id, email):
+    if not salesorder_id:
+        return
+    body = """
+    Dear Customer,
+    Thanks for your interest in our services.
+    Please find our sales order attached with this mail.
+
+    Assuring you of our best services at all times.
+    Regards,
+    Harish K. Neotia
+    E-PanipuriKart
+    """
+    return requests.post(
+        "https://books.zoho.in/api/v3/salesorders/"+salesorder_id+"/email",
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        },
+        json={
+            "send_from_org_email_id": True,
+            "to_mail_ids": [
+                email
+            ],
+            "cc_mail_ids": [
+                "gyanaranjan7205@gmail.com", "jyotimay16@gmail.com"
+            ],
+            "subject": "Sales Order Statement",
+            "body": body
+        }).json()
+
+
+def create_zoho_sales_order(customer_id, item_id):
+    response = requests.post(
+        "https://books.zoho.in/api/v3/salesorders",
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        },
+        json={
+            "customer_id": customer_id,
+            "line_items": [
+                {
+                    "item_id": item_id
+                }
+            ]
+        }).json()
+    if response.get("code") == 0:
+        return response.get("salesorder").get("salesorder_id")
 
 
 @app.route('/franchisee/register/<path:path>', methods=['POST'])
