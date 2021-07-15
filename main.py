@@ -1603,7 +1603,10 @@ def createShopItem():
                   value in data.items() if field in valid_fields}
 
     if len(valid_fields) == len(createItem):
-        createItem.update({"itemId": generate_custom_id()})
+        createItem.update({
+            "itemId": generate_custom_id(),
+            "rating": 0
+        })
         mongo.db.shopping_menu.update_one(
             {
                 "categoryId": categoryId
@@ -1769,6 +1772,20 @@ def removeFromFavourites():
             "models": modelUid
         }})
     return jsonify({"message": "Success"})
+
+
+@app.route('/franchisee/getStatistics', methods=['GET'])
+@cross_origin()
+@verify_token
+def getStatistics():
+    cartId = request.args.get("cartId")
+    data = mongo.db.daily_statistics.find(
+        {"cartId": cartId}, {"_id": 0, "cartId": 0})
+    newData = []
+    for rec in data:
+        rec["timestamp"] = rec["timestamp"].strftime("%d-%m-%Y")
+        newData.append(rec)
+    return jsonify({"stats": newData})
 
 
 @app.route('/franchisee/sendSalesOrder', methods=['POST'])

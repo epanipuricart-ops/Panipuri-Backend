@@ -10,7 +10,7 @@ import json
 import time
 import os
 import binascii
-from datetime import datetime
+from datetime import datetime, date
 from functools import wraps
 from config import config as cfg
 import subprocess
@@ -416,6 +416,14 @@ def placeOrder():
         createOrder["deliveryCharge"] = 0.0
         createOrder["packingCharge"] = 0.0
         mongo.db.online_orders.insert_one(createOrder)
+        mongo.db.daily_statistics.update_one({
+            "cartId": createOrder["cartId"],
+            "timestamp": datetime.combine(date.today(), datetime.min.time())
+        },
+            {
+                "$inc": {"dailyCount": 1}
+        },
+            upsert=True)
         createOrder.pop("_id")
         if manualBilling:
             socketio.emit("receiveOrder", createOrder,
