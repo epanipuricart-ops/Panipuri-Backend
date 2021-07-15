@@ -334,11 +334,13 @@ def placeOrder():
         "deliveryAddress",
         "orderType",
         "modeOfPayment",
-        "transactionId"]
+        "transactionId",
+        "manualBilling"]
     if "orderType" not in data:
         data["orderType"] = "delivery"
     if "transactionId" not in data:
         data["transactionId"] = ""
+    manualBilling = "manualBilling" in data and data["manualBilling"]
     createOrder = {field: value for field,
                    value in data.items() if field in valid_fields}
 
@@ -405,6 +407,7 @@ def placeOrder():
             "orderStatus": "placed",
             "subTotal": extraData["subTotal"],
             "gst": extraData["gst"],
+            "manualBilling": manualBilling,
             "total": round(
                 (1+extraData["gst"])*extraData["subTotal"], 2)
         }
@@ -414,8 +417,9 @@ def placeOrder():
         createOrder["packingCharge"] = 0.0
         mongo.db.online_orders.insert_one(createOrder)
         createOrder.pop("_id")
-        socketio.emit("receiveOrder", createOrder,
-                      json=True, room=extraData["sid"])
+        if manualBilling:
+            socketio.emit("receiveOrder", createOrder,
+                          json=True, room=extraData["sid"])
         return jsonify(createOrder)
     return jsonify({"message": "Missing fields while creating order"})
 
