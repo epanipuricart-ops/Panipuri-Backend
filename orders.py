@@ -486,7 +486,8 @@ def getOrderByTypeAndStatus():
     _type = request.args.get("type")
     if status and _type:
         orders = mongo.db.online_orders.find(
-            {"orderType": _type, "orderStatus": status}, {"_id": 0})
+            {"orderType": _type, "orderStatus": status},
+            {"_id": 0}).sort("timestamp", -1)
         return jsonify({"orders": list(orders)})
     return jsonify({"message": "No status/type arguments sent"}), 400
 
