@@ -341,6 +341,7 @@ def placeOrder():
     if "transactionId" not in data:
         data["transactionId"] = ""
     manualBilling = "manualBilling" in data and data["manualBilling"]
+    data["manualBilling"] = manualBilling
     createOrder = {field: value for field,
                    value in data.items() if field in valid_fields}
 
@@ -446,7 +447,8 @@ def updateOrderStatus():
     if orderId and status:
         if status == 'pending':
             clientEmail = order_data['customerEmail']
-            sid_list = mongo.db.customer_sid.find_one({"email": clientEmail})
+            sid_list = mongo.db.customer_sid.find_one(
+                {"email": clientEmail}).get("sid", [])
             subTotal = order_data['subTotal']
             gst = order_data['gst']
             total = (subTotal + deliveryCharge + packingCharge) * (1+gst)
@@ -474,7 +476,7 @@ def updateOrderStatus():
                 {"$set": {
                     "orderStatus": status
                 }})
-            return jsonify({"message": "Success"})
+        return jsonify({"message": "Success"})
     return jsonify({"message": "Missing fields"}), 400
 
 
