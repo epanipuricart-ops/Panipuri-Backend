@@ -465,7 +465,7 @@ def updateOrderStatus():
                 {"orderId": orderId}, {"_id": 0})
             socketio.emit("receiveEditedOrder", order_data,
                           json=True, room=sid_list)
-        elif status == 'confirmed':
+        elif status == 'confirmed' or status == 'canceled':
             sid_list = mongo.db.menu.find_one(
                 {"cartId": order_data["cartId"]})["sid"]
             socketio.emit("receiveConfirmedOrder", order_data,
