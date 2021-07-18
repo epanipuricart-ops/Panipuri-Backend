@@ -426,7 +426,7 @@ def placeOrder():
         },
             upsert=True)
         createOrder.pop("_id")
-        if manualBilling:
+        if not manualBilling:
             socketio.emit("receiveOrder", createOrder,
                           json=True, room=extraData["sid"])
         return jsonify(createOrder)
@@ -442,10 +442,11 @@ def updateOrderStatus():
     status = data.get("status")
     order_data = mongo.db.online_orders.find_one(
         {"orderId": orderId}, {"_id": 0})
-    deliveryCharge = float(data.get('deliveryCharge'))
-    packingCharge = float(data.get('packingCharge'))
+
     if orderId and status:
         if status == 'pending':
+            deliveryCharge = float(data.get('deliveryCharge'))
+            packingCharge = float(data.get('packingCharge'))
             clientEmail = order_data['customerEmail']
             sid_list = mongo.db.customer_sid.find_one(
                 {"email": clientEmail}).get("sid", [])

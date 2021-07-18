@@ -112,7 +112,41 @@ def refresh_zoho_access_token(force=False):
         ZOHO_TOKEN["timestamp"] = time.time()
 
 
-def send_data_to_zoho(clients):
+def create_zoho_book_contact(client):
+    contacts = "https://books.zoho.com/api/v3/contacts"
+    header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
+    name = (client.get("firstName") + " " + client.get("lastName")).strip()
+    data = {
+        "contact_name": name,
+        "contact_persons": [
+            {
+                "salutation": client.get("title"),
+                "first_name": client.get("firstName"),
+                "last_name": client.get("lastName"),
+                "email": client.get("email"),
+                "phone": client.get("mobile"),
+                "mobile": client.get("mobile"),
+                "is_primary_contact": True,
+            }]
+    }
+    response = requests.post(
+        contacts,
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers=header, json=data).json()
+    if response["code"] == 0:
+        mongo.db.zoho_customer.update_one(
+            {
+                "email": client.get("email")
+            }, {
+                "$set": {
+                    "zohoId": response["contact"]["contact"]["contact_id"]
+                }
+            })
+
+
+def create_zoho_crm_contact(clients):
     zoho_records = [{
         "First_Name": client.get("firstName"),
         "Last_Name": client.get("lastName"),
@@ -129,15 +163,7 @@ def send_data_to_zoho(clients):
             "blueprint"
         ]
     }
-    response = requests.post(contacts, headers=header, json=data).json()
-    zoho_customers = []
-    for i, client in enumerate(clients):
-        response_record = response["data"][i]
-        if response_record["code"].upper() == "SUCCESS":
-            zoho_customers.append({
-                "email": client.get("email"),
-                "zohoId": response_record["details"]["id"]})
-    mongo.db.zoho_customer.insert_many(zoho_customers)
+    requests.post(contacts, headers=header, json=data)
 
 
 def send_estimate_mail(estimate_id, email):
@@ -276,7 +302,7 @@ def register(path):
         }
         try:
             mongo.db.clients.insert_one(doc)
-            send_data_to_zoho([doc])
+            create_zoho_book_contact(doc)
             return jsonify({
                 "title": doc['title'],
                 "firstName": doc['firstName'],
@@ -439,15 +465,23 @@ def sendOTP():
     if 'phone' in request.json:
         phone = request.json['phone']
         email = request.json['email']
-        #email = 'jyotimay16@gmail.com'
-        name = request.json['firstName']
-        data = {"message": msg, "phone": phone, "name": name,
+        # email = 'jyotimay16@gmail.com'
+        firstName = request.json['firstName']
+        lastName = request.json['lastName']
+        data = {"message": msg, "phone": phone, "name": firstName,
                 "email": email, "type": typeOfMessage}
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        num = mongo.db.clients.find_one({"mobile": phone})
+        rec = {
+            'firstName': firstName,
+            'lastName': lastName,
+            'email': email,
+            'mobile': phone
+        }
+        create_zoho_crm_contact([rec])
+        mongo.db.clients.find_one({"mobile": phone})
         if False:
             return jsonify({"message":
                             "Mobile number already registered"}), 423
