@@ -46,7 +46,7 @@ pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
 global_key = "ueQ4sZ"
 spring_url = "http://15.207.147.88:8080/"
 agreement_url = "http://15.207.147.88:8081/"
-mailer_url = "http://15.207.147.88:8082/"
+mailer_url = "http://15.207.147.88:8080/"
 payment_url = "http://15.207.147.88:8083/"
 
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
