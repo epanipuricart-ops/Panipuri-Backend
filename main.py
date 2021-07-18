@@ -80,10 +80,9 @@ def get_last_id(city):
             "value": 1
         }})
     if data:
-        new_id = "epanipuricart." + data["city"] + "." + str(data["value"])
+        return "epanipuricart." + data["city"] + "." + str(data["value"])
     else:
-        new_id = "epanipuricart.dummy.5"
-    return new_id
+        return "epanipuricart.dummy.5"
 
 
 def generate_custom_id():
@@ -144,6 +143,8 @@ def create_zoho_book_contact(client):
                     "zohoId": response["contact"]["contact"]["contact_id"]
                 }
             })
+    else:
+        print("ZOHO BOOKS:"+response)
 
 
 def create_zoho_crm_contact(clients):
@@ -163,7 +164,7 @@ def create_zoho_crm_contact(clients):
             "blueprint"
         ]
     }
-    requests.post(contacts, headers=header, json=data)
+    print(requests.post(contacts, headers=header, json=data).json())
 
 
 def send_estimate_mail(estimate_id, email):
@@ -1576,6 +1577,19 @@ def getAllLocations():
     return jsonify({"message": "No State/City provided"}), 400
 
 
+@app.route('/franchisee/getCitiesByState', methods=['GET'])
+@cross_origin()
+@verify_token
+def getCitiesByState():
+    state = request.args.get("state")
+    if state:
+        locations = mongo.db.device_ids.find(
+            {"state": re.compile(state, re.IGNORECASE)},
+            {"_id": 0, "town": 1})
+        return jsonify({"cities": list({x["town"] for x in locations})})
+    return jsonify({"message": "No State provided"}), 400
+
+
 @app.route('/franchisee/getAllCategories', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -2009,6 +2023,7 @@ def move_agreement_pdf():
 
 if __name__ == "__main__":
     print("starting...")
+    refresh_zoho_access_token(force=True)
     app.run(host=cfg.Flask['HOST'],
             port=cfg.Flask['PORT'],
             threaded=cfg.Flask['THREADED'],
