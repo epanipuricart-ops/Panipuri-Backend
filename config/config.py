@@ -21,7 +21,7 @@ IOTFlask = {
 }
 
 ZohoConfig = {
-    "refresh_token": "1000.60616e0f4b347e94d7f8458b6ae340e3.c1ec0873355e2ab77bb8f1df81d57dc2",
+    "refresh_token": "1000.510cb546d2f8355230a541d619043fbe.bfa28cbbfce2dff97ccffcfd686a7594",
     "client_id": "1000.TM9579QXAQRONAPUYM8I9V3JR1AIZY",
     "client_secret": "3e4811b9ced7df56e36e1e5090c49b012c03092fb9",
     "organization_id": "60003188756"
