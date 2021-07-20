@@ -140,11 +140,11 @@ def create_zoho_book_contact(client):
                 "email": client.get("email")
             }, {
                 "$set": {
-                    "zohoId": response["contact"]["contact"]["contact_id"]
+                    "zohoId": response["contact"]["contact_id"]
                 }
             })
     else:
-        print("ZOHO BOOKS:"+response)
+        print("ZOHO BOOKS:"+str(response))
 
 
 def create_zoho_crm_contact(clients):
