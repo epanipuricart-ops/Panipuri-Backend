@@ -13,6 +13,7 @@ import binascii
 from datetime import datetime, date
 from functools import wraps
 from config import config as cfg
+import re
 import subprocess
 
 
@@ -237,6 +238,18 @@ def getAllLocations():
             {"_id": 0, "location": 1, "device_id": 1})
         return jsonify({"locations": list(locations)})
     return jsonify({"message": "No State/City provided"}), 400
+
+@app.route('/orderOnline/getCitiesByState', methods=['GET'])
+@cross_origin()
+@verify_token
+def getCitiesByState():
+    state = request.args.get("state")
+    if state:
+        locations = mongo.db.device_ids.find(
+            {"state": re.compile(state, re.IGNORECASE)},
+            {"_id": 0, "town": 1})
+        return jsonify({"cities": list({x["town"] for x in locations})})
+    return jsonify({"message": "No State provided"}), 400
 
 
 @app.route('/orderOnline/orderStatus', methods=['GET'])

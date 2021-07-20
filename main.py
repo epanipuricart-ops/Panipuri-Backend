@@ -112,7 +112,7 @@ def refresh_zoho_access_token(force=False):
 
 
 def create_zoho_book_contact(client):
-    contacts = "https://books.zoho.com/api/v3/contacts"
+    contacts = "https://books.zoho.in/api/v3/contacts"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
     name = (client.get("firstName") + " " + client.get("lastName")).strip()
     data = {
@@ -301,19 +301,30 @@ def register(path):
             "roles": ['subscriber', 'customer'],
             "exportedZoho": False
         }
-        try:
-            mongo.db.clients.insert_one(doc)
-            create_zoho_book_contact(doc)
-            return jsonify({
-                "title": doc['title'],
-                "firstName": doc['firstName'],
-                "lastName": doc['lastName'],
-                "email": doc['email'],
-                "mobile": doc['mobile'],
-                "roles": doc['roles']
-            })
-        except Exception:
-            return jsonify({"message": "Some error occurred"}), 500
+
+        mongo.db.clients.insert_one(doc)
+        create_zoho_book_contact(doc)
+        return jsonify({
+            "title": doc['title'],
+            "firstName": doc['firstName'],
+            "lastName": doc['lastName'],
+            "email": doc['email'],
+            "mobile": doc['mobile'],
+            "roles": doc['roles']
+        })
+        # try:
+        #     mongo.db.clients.insert_one(doc)
+        #     create_zoho_book_contact(doc)
+        #     return jsonify({
+        #         "title": doc['title'],
+        #         "firstName": doc['firstName'],
+        #         "lastName": doc['lastName'],
+        #         "email": doc['email'],
+        #         "mobile": doc['mobile'],
+        #         "roles": doc['roles']
+        #     })
+        # except Exception:
+        #     return jsonify({"message": "Some error occurred"}), 500
 
     elif path.lower() == 'customer':
         decoded = jwt.decode(token,
