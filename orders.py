@@ -480,9 +480,16 @@ def updateOrderStatus():
             socketio.emit("receiveEditedOrder", order_data,
                           json=True, room=sid_list)
         elif status == 'confirmed' or status == 'canceled':
+            mongo.db.online_orders.update_one(
+                {"orderId": orderId},
+                {"$set": {
+                    "orderStatus": status
+                }})
+            order_data_updated = mongo.db.online_orders.find_one(
+            {"orderId": orderId}, {"_id": 0})
             sid_list = mongo.db.menu.find_one(
                 {"cartId": order_data["cartId"]})["sid"]
-            socketio.emit("receiveConfirmedOrder", order_data,
+            socketio.emit("receiveConfirmedOrder", order_data_updated,
                           json=True, room=sid_list)
         else:
             mongo.db.online_orders.update_one(
@@ -581,7 +588,7 @@ def getAddress():
     address = mongo.db.address_book.find_one({"email": email})
     if address:
         return jsonify({"address": address.pop("address")})
-    return jsonify({"message": "No address saved"})
+    return jsonify({"address": []})
 
 
 @app.route('/orderOnline/updateAddress/<field>', methods=['POST'])
@@ -690,6 +697,14 @@ def getOrderByOrderIdEvent(data):
         newOrders = mongo.db.online_orders.find_one(
             {"orderId": orderId},
             {"_id": 0})
+        address = mongo.db.device_ids.find_one(
+            {"device_id": newOrders['cartId']},
+            {"_id": 0}
+        )
+        city = address['town']
+        location = address['location']
+        newOrders['location'] = location
+        newOrders['city'] = city
         emit("getOrderByOrderId", newOrders, json=True)
         return {}
     emit("getOrderByOrderId", {"message": "No orderId sent"})

@@ -206,6 +206,29 @@ def toggle():
 # route to toggle
 
 
+@app.route("/wizard/toggle", methods=['GET', 'POST'])
+@cross_origin()
+def wizardToggle():
+    if request.method == "POST":
+        uid = request.json['customerId']
+        if True:
+            devices = mongo.db.devices
+            state = request.json["state"]
+            devices.update_one({"uid": uid}, {'$set': {"activeState": state}})
+            response = devices.find_one({"uid": uid})
+            if (response["activeState"] == 1) and (response["deviceState"] == 1):
+                return jsonify({"message": "Device Started", "status": 1})
+            elif (response["activeState"] == 0) and (response["deviceState"] == 0):
+                return jsonify({"message": "Device Stopped", "status": 0})
+            elif (response["activeState"] == 1) and (response["deviceState"] == 0):
+                return jsonify({"message": "Start Request sent, waiting for device to respond", "status": 2})
+            else:
+                return jsonify({"message": "Stop Request sent, waiting for device to respond", "status": 3})
+
+    else:
+        return jsonify({"message": "Authorization Error"}), 403
+
+
 @app.route("/switchMode", methods=['GET', 'POST'])
 @cross_origin()
 def switchmode():
@@ -391,6 +414,17 @@ def getStats():
     else:
         return jsonify({"message": "Authentication Error"}), 401
 
+@app.route("/wizard/getStats", methods=['GET', 'POST'])
+@cross_origin()
+def wizardGetStats():
+    uid = request.args.get('customerId')
+    if True:
+        available, data = sort(uid)
+        if available:
+            return jsonify({"result": data})
+        else:
+            return jsonify({"message": "No record found"}), 403
+
 
 @app.route("/getToday", methods=['GET', 'POST'])
 @cross_origin()
@@ -431,6 +465,17 @@ def getLevel():
     else:
         return jsonify({"message": "Authentication Error"}), 401
 
+@app.route("/wizard/getLevel", methods=['GET', 'POST'])
+@cross_origin()
+def wizardGetLevel():
+    uid = request.args.get('customerId')
+    if True:
+        available, data = sort_level(uid)
+        if available:
+            return jsonify({"result": data})
+        else:
+            return jsonify({"message": "No record found"}), 403
+
 
 @app.route("/getCount", methods=['GET', 'POST'])
 @cross_origin()
@@ -455,6 +500,27 @@ def getCount():
             return jsonify({"message": "No record found"}), 403
     else:
         return jsonify({"message": "Authentication Error"}), 401
+
+@app.route("/wizard/getCount", methods=['GET', 'POST'])
+@cross_origin()
+def wizardGetCount():
+    uid = request.args.get('customerId')
+    if True:
+        response = mongo.db.counter.find_one({"uid": uid})
+        if response:
+            arr = []
+            for ele in response['data']:
+                c = {}
+                c['name'] = ele['name']
+                if len(ele['count']) >= 20:
+                    c['count'] = ele['count'][-20:]
+                else:
+                    c['count'] = ele['count']
+                arr.append(c)
+
+            return jsonify({"result": arr})
+        else:
+            return jsonify({"message": "No record found"}), 403
 
 
 @app.route("/getCountByDate", methods=['GET', 'POST'])
@@ -504,6 +570,49 @@ def getCountByDate():
     else:
         return jsonify({"message": "Authorization Error"}), 403
 
+@app.route("/wizard/getCountByDate", methods=['GET', 'POST'])
+@cross_origin()
+def wizardGetCountByDate():
+    if request.method == 'POST':
+        start = request.json['start']
+        end = request.json['end']
+        s = int(datetime.strptime(start, "%m-%d-%Y").timestamp()*1000)
+        e = int(datetime.strptime(end, "%m-%d-%Y").timestamp()*1000)
+        uid = request.args.get('customerId')
+        if True:
+            response = mongo.db.counter.find_one({"uid": uid})
+            if response:
+                arr = []
+                if start == end:
+                    for ele in response['data']:
+                        c = {}
+                        c['name'] = ele['name']
+                        c['count'] = []
+                        for item in ele['count']:
+                            if item['date'] == start:
+                                c['count'] = [
+                                    {"date": start, "dailyCount": item["dailyCount"]}]
+                                break
+                        arr.append(c)
+                    return jsonify({"result": arr})
+                else:
+                    for ele in response['data']:
+                        mini_arr = []
+                        c = {}
+                        c['name'] = ele['name']
+                        c['count'] = []
+                        for item in ele['count']:
+                            curr = int(datetime.strptime(
+                                item['date'], "%m-%d-%Y").timestamp()*1000)
+                            if curr >= s and curr <= e:
+                                mini_arr.append(item)
+                        c['count'] = mini_arr
+                        arr.append(c)
+                    return jsonify({"result": arr})
+            else:
+                return jsonify({"message": "No record found"}), 403
+        else:
+            return jsonify({"message": "Authentication error"}), 401
 
 @app.route("/wizard/getProfile", methods=['GET'])
 @cross_origin()
@@ -538,6 +647,12 @@ def updateProfileWizard():
         })
     return jsonify({"message": "Success"})
 
+@app.route("/wizard/postESPStatus", methods=['POST'])
+@cross_origin()
+def postESPStatus():
+    data = request.json
+    print(data['position'] + " " + "of " + data["deviceId"] + " is healthy")
+    return jsonify({"message": "Success"})
 
 @app.route("/wizard/updatePayment/<action>", methods=['POST'])
 @cross_origin()
