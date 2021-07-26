@@ -142,7 +142,8 @@ def create_zoho_book_contact(client):
                 "$set": {
                     "zohoId": response["contact"]["contact_id"]
                 }
-            })
+            },
+            upsert=True)
     else:
         print("ZOHO BOOKS:"+str(response))
 
