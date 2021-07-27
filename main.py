@@ -300,7 +300,8 @@ def register(path):
             "lastName": lastName,
             "firebase_id": firebase_id,
             "roles": ['subscriber', 'customer'],
-            "exportedZoho": False
+            "exportedZoho": False,
+            "date": int(round(time.time() * 1000))
         }
 
         mongo.db.clients.insert_one(doc)
@@ -347,7 +348,8 @@ def register(path):
             "lastName": lastName,
             "firebase_id": firebase_id,
             "roles": ['customer'],
-            "exportedZoho": False
+            "exportedZoho": False,
+            "date": int(round(time.time() * 1000))
         }
         try:
             mongo.db.clients.insert_one(doc)
@@ -361,6 +363,27 @@ def register(path):
             })
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
+
+
+@app.route('/franchisee/convertToSubscriber', methods=['GET'])
+@cross_origin()
+@verify_token
+def convertToSubscriber():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
+    if "customer" in data["roles"]:
+        mongo.db.clients.update_one(
+            {'firebase_id': decoded['user_id']},
+            {'$addToSet': {
+                'roles': 'subscriber'
+            }})
+        return jsonify({"message": "Success"})
+    return jsonify({"message": "User is not customer"}), 401
 
 
 @app.route('/franchisee/login/<path:path>', methods=['POST'])
@@ -386,15 +409,15 @@ def login(path):
                     'mobile': data['mobile'],
                     'roles': data['roles']
                 })
+            # else:
+            #     if 'customer' in data['roles']:
+            #         mongo.db.clients.update_one(
+            #             {'firebase_id': decoded['user_id']},
+            #             {'$push': {
+            #                 'roles': 'subscriber'
+            #             }})
             else:
-                if 'customer' in data['roles']:
-                    mongo.db.clients.update_one(
-                        {'firebase_id': decoded['user_id']},
-                        {'$push': {
-                            'roles': 'subscriber'
-                        }})
-                else:
-                    return jsonify({'message': 'Unauthorised Access'}), 403
+                return jsonify({'message': 'Unauthorised Access'}), 403
         else:
             return jsonify({"message": "User not registered"}), 401
 
@@ -1080,25 +1103,31 @@ def uploadDocuments():
                             return jsonify({"message":
                                             "Some Error Occurred"}), 500
         mongo.db.clients.update_one({"email": email},
-                                            {"$addToSet": {
-                                                "roles": "franchisee"
-                                            }})
+                                    {"$addToSet": {
+                                        "roles": "franchisee"
+                                    }})
         mongo.db.orders.update_one({"order_id": order_id},
-                                        {"$set": {
-                                            "status": "placed"
-                                        }})
+                                   {"$set": {
+                                       "status": "placed"
+                                   }})
         mongo.db.order_history.insert_one({
-                    "order_id":
-                    order_id,
-                    "status":
-                    "placed",
-                    "date":
-                    int(round(time.time() * 1000))
-                })
+            "order_id": order_id,
+            "status": "placed",
+            "date": int(round(time.time() * 1000))
+        })
+        payload = {
+            "attachmentPaths": [],
+            "bccAddresses": [],
+            "ccAddresses": [],
+            "mailBody": "Your Order "+str(order_id)+" has been successfully placed.",
+            "mailSubject": "Order Successful",
+            "toAddresses": [email, "ceo@epanipuricart.com"]
+        }
+        requests.post(mailer_url + 'send-mail', json=payload)
         return jsonify({"message": "Success"})
         # user_data = mongo.db.general_forms.find_one({"email": email})
         # docs_data = mongo.db.docs.find_one({"email": email})
-        # # base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
+        # base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
         # name = user_data['title'] + user_data['firstName'] + " " + user_data[
         #     'lastName']
         # aadhar = user_data['aadhar']
@@ -1321,13 +1350,15 @@ def uploadAgreement():
             email = orders_data['email']
             user_data = mongo.db.general_forms.find_one({"email": email})
             docs_data = mongo.db.docs.find_one({"order_id": orderId})
-            hash_data = mongo.db.hash_map.find_one({"transaction_id": orders_data['transaction_id']})
+            hash_data = mongo.db.hash_map.find_one(
+                {"transaction_id": orders_data['transaction_id']})
             # base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
             name = user_data['title'] + user_data['firstName'] + " " + user_data[
                 'lastName']
             aadhar = user_data['aadhar']
             brand = "E-Panipurii Kartz"
-            customer_id = mongo.db.device_ids.find_one({"order_id": orderId})['device_id']
+            customer_id = mongo.db.device_ids.find_one(
+                {"order_id": orderId})['device_id']
             model = "Table Top"
             model_extension = "3-nozzle system"
             fName = user_data['fatherName']
@@ -1337,11 +1368,11 @@ def uploadAgreement():
             mobile = user_data['mobile']
             amount = hash_data['amount']
             aadharLogoPath = os.path.join(app.config['UPLOAD_FOLDER'],
-                                        docs_data['aadhar'])
+                                          docs_data['aadhar'])
             ap = str(os.path.abspath(aadharLogoPath))
             #ap = str(aadharLogoPath)
             customerPhotoPath = os.path.join(app.config['UPLOAD_FOLDER'],
-                                            docs_data['photo'])
+                                             docs_data['photo'])
             cp = str(os.path.abspath(customerPhotoPath))
             #cp = str(customerPhotoPath)
             post = {
@@ -1369,14 +1400,17 @@ def uploadAgreement():
             try:
                 print(post)
                 response = requests.post(agreement_url + 'generate-agreement',
-                                        data=json.dumps(post),
-                                        headers=headers)
+                                         data=json.dumps(post),
+                                         headers=headers)
                 print(response.text)
-                
-                mongo.db.docs.update_one({"order_id": orderId},
-                                        {"$set": {
-                                            "pdf": str(response.text)
-                                        }})
+                resData = response.json()
+                mongo.db.digio_response.update_one({"order_id": orderId},
+                                                   {"$set": resData},
+                                                   upsert=True)
+                # mongo.db.docs.update_one({"order_id": orderId},
+                #                         {"$set": {
+                #                             "pdf": str(response.text)
+                #                         }})
                 # payload = {
                 #             "attachmentPaths": [
                 #                 response.text
