@@ -377,7 +377,7 @@ def placeOrder():
 
     if len(createOrder) == len(valid_fields):
         email = createOrder['customerEmail']
-        cart = mongo.db.order_cart.find_one_and_delete(
+        cart = mongo.db.order_cart.find_one(
             {"email": email}, {"_id": 0})
         if not cart:
             return jsonify({"message": "Cart Empty"}), 400
@@ -453,7 +453,8 @@ def placeOrder():
                 "$inc": {"dailyCount": 1}
         },
             upsert=True)
-        createOrder.pop("_id")
+        mongo.db.order_cart.delete_one({"email": email})
+        createOrder.pop("_id", None)
         socketio.emit("receiveOrder", createOrder,
                       json=True, room=extraData["sid"])
         return jsonify(createOrder)
@@ -527,6 +528,7 @@ def removeFromOrderCartManual():
 def newOrderId():
     orderId = {"orderId": generate_custom_id()}
     mongo.db.online_orders.insert_one(orderId)
+    orderId.pop("_id", None)
     return jsonify(orderId)
 
 
@@ -565,7 +567,7 @@ def placeOrderManual():
 
     if len(createOrder) == len(valid_fields):
         orderId = createOrder['orderId']
-        cart = mongo.db.order_cart.find_one_and_delete(
+        cart = mongo.db.order_cart.find_one(
             {"orderId": orderId}, {"_id": 0})
         if not cart:
             return jsonify({"message": "Cart Empty"}), 400
@@ -610,7 +612,7 @@ def placeOrderManual():
         if not data[0]["isActive"]:
             return jsonify({"message": "Restaurant Offline"}), 400
         extraData = {"subTotal": 0,
-                     "gst": data[0]["gst"], "sid": data[0]["sid"]}
+                     "gst": data[0]["gst"]}
         items_arr = []
         for d in data:
             qty = itemsDict.get(d["itemId"], 1)
@@ -640,7 +642,7 @@ def placeOrderManual():
                 "$inc": {"dailyCount": 1}
         },
             upsert=True)
-        createOrder.pop("_id")
+        mongo.db.order_cart.delete_one({"orderId": orderId})
         return jsonify(createOrder)
     return jsonify({"message": "Missing fields while creating order"})
 

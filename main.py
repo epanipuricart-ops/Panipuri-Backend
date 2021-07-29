@@ -2159,6 +2159,12 @@ def move_agreement_pdf():
     print(str(len(file_names)) + " Moved!!")
 
 
+@scheduler.task('cron', id='clear_sid', minute=0, hour=2)
+def clear_sid():
+    mongo.db.menu.update_many({}, {"$set": {"sid": []}})
+    mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
+
+
 if __name__ == "__main__":
     print("starting...")
     refresh_zoho_access_token(force=True)
