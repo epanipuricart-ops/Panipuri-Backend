@@ -76,7 +76,7 @@ def uploadLevel():
 
 
 # route to register device
-@app.route("/registerDevice", methods=['GET', 'POST'])
+@app.route("/wizard/registerDevice", methods=['GET', 'POST'])
 @cross_origin()
 def registerDevice():
     if request.method == "POST":

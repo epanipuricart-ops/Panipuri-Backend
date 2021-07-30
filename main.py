@@ -48,6 +48,7 @@ spring_url = "http://15.207.147.88:8080/"
 agreement_url = "http://15.207.147.88:8081/"
 mailer_url = "http://15.207.147.88:8080/"
 payment_url = "http://15.207.147.88:8083/"
+iot_api_url = "http://127.0.0.1:5002/"
 
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
@@ -1106,10 +1107,11 @@ def uploadDocuments():
                                     {"$addToSet": {
                                         "roles": "franchisee"
                                     }})
-        mongo.db.orders.update_one({"order_id": order_id},
-                                   {"$set": {
-                                       "status": "placed"
-                                   }})
+        order_data = mongo.db.orders.find_one_and_update(
+            {"order_id": order_id},
+            {"$set": {
+                "status": "placed"
+            }})
         mongo.db.order_history.insert_one({
             "order_id": order_id,
             "status": "placed",
@@ -1124,6 +1126,28 @@ def uploadDocuments():
             "toAddresses": [email, "ceo@epanipuricart.com"]
         }
         requests.post(mailer_url + 'send-mail', json=payload)
+
+        # create Default Menu
+        device_data = mongo.db.device_ids.find_one({"order_id": order_id})
+        default_menu = cfg.DefaultMenu.copy()
+        for category in default_menu["menu"]:
+            category.update({"categoryId": generate_custom_id()})
+            for item in category["items"]:
+                item.update({"itemId": generate_custom_id()})
+        mongo.db.menu.insert_one({"cartId": device_data["device_id"]},
+                                 {"$set": default_menu})
+
+        # trigger iot register api
+        # model_uid = order_data.get("model_uid", 1)
+        # costing_data = mongo.db.costing.find_one({"modelType": model_uid})
+        # model_type = costing_data.get("extension").strip()[0]
+        # iot_data = {
+        #     "type": model_type,
+        #     "uid": device_data["device_id"],
+        #     "ownerType": 1
+        # }
+        # requests.post(iot_api_url+"/wizard/registerDevice", json=iot_data)
+
         return jsonify({"message": "Success"})
         # user_data = mongo.db.general_forms.find_one({"email": email})
         # docs_data = mongo.db.docs.find_one({"email": email})
@@ -1603,18 +1627,18 @@ def wizardLogin():
 @app.route('/franchisee/addAliasData', methods=['POST'])
 @cross_origin()
 def addAliasData():
-    alias_email = request.json['aliasEmail']
-    alias_name = request.json['aliasName']
     device_id = request.json['customerId']
     data = mongo.db.alias_data.find({'device_id': device_id}, {"_id": 0})
     if (len(list(data)) == 2):
         return jsonify({"message": "Cannot Add more data"}), 400
-    else:
-        mongo.db.alias_data.insert_one({
-            "device_id": device_id,
-            "alias_email": alias_email,
-            "alias_name": alias_name})
-        return jsonify({"message": "Succesfully added"})
+    alias_email = request.json['aliasEmail']
+    alias_name = request.json['aliasName']
+    mongo.db.alias_data.insert_one({
+        "alias_id": generate_custom_id(),
+        "device_id": device_id,
+        "alias_email": alias_email,
+        "alias_name": alias_name})
+    return jsonify({"message": "Succesfully added"})
 
 
 @app.route('/franchisee/getAliasData', methods=['GET'])
@@ -1627,6 +1651,33 @@ def getAliasData():
         return jsonify({"result": list(data)})
     else:
         return jsonify({"result": "No result found"}), 404
+
+
+@app.route('/franchisee/updateAliasData', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateAliasData():
+    aliasId = request.json.get("aliasId")
+    aliasName = request.json.get("aliasName")
+    if aliasId is None or aliasName is None:
+        return jsonify({"message": "No alias id/name sent"}), 400
+    mongo.db.alias_data.update_one(
+        {"alias_id": aliasId},
+        {
+            "$set": {"alias_name": aliasName}
+        })
+    return jsonify({"message": "Success"})
+
+
+@app.route('/franchisee/deleteAliasData', methods=['POST'])
+@cross_origin()
+@verify_token
+def deleteAliasData(field):
+    aliasId = request.json.get("aliasId")
+    if aliasId is None:
+        return jsonify({"message": "No alias id sent"}), 400
+    mongo.db.alias_data.delete_one({"alias_id": aliasId})
+    return jsonify({"message": "Success"})
 
 
 @app.route('/franchisee/getMenu', methods=['GET'])
