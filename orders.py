@@ -239,6 +239,7 @@ def getAllLocations():
         return jsonify({"locations": list(locations)})
     return jsonify({"message": "No State/City provided"}), 400
 
+
 @app.route('/orderOnline/getCitiesByState', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -339,6 +340,13 @@ def removeFromOrderCart():
 @verify_token
 def placeOrder():
     data = request.json
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
     valid_fields = [
         "cartId",
         "customerName",
@@ -347,14 +355,21 @@ def placeOrder():
         "deliveryAddress",
         "orderType",
         "modeOfPayment",
-        "transactionId",
-        "manualBilling"]
+        "transactionId"]
     if "orderType" not in data:
         data["orderType"] = "delivery"
     if "transactionId" not in data:
         data["transactionId"] = ""
-    manualBilling = "manualBilling" in data and data["manualBilling"]
-    data["manualBilling"] = manualBilling
+    customerData = mongo.db.clients.find_one({"email": email})
+    if not customerData:
+        return jsonify({"message": "No such customer found"}), 400
+    customerName = " ".join([
+        customerData.get("title", ""),
+        customerData.get("firstName"),
+        customerData.get("lastName")])
+    customerName = customerName.strip()
+    data.update({"customerName": customerName, "customerEmail": email,
+                 "customerPhone": customerData.get("mobile")})
     createOrder = {field: value for field,
                    value in data.items() if field in valid_fields}
 
@@ -362,7 +377,7 @@ def placeOrder():
 
     if len(createOrder) == len(valid_fields):
         email = createOrder['customerEmail']
-        cart = mongo.db.order_cart.find_one_and_delete(
+        cart = mongo.db.order_cart.find_one(
             {"email": email}, {"_id": 0})
         if not cart:
             return jsonify({"message": "Cart Empty"}), 400
@@ -421,7 +436,7 @@ def placeOrder():
             "orderStatus": "placed",
             "subTotal": extraData["subTotal"],
             "gst": extraData["gst"],
-            "manualBilling": manualBilling,
+            "manualBilling": False,
             "total": round(
                 (1+extraData["gst"])*extraData["subTotal"], 2)
         }
@@ -438,10 +453,196 @@ def placeOrder():
                 "$inc": {"dailyCount": 1}
         },
             upsert=True)
-        createOrder.pop("_id")
-        if not manualBilling:
-            socketio.emit("receiveOrder", createOrder,
-                          json=True, room=extraData["sid"])
+        mongo.db.order_cart.delete_one({"email": email})
+        createOrder.pop("_id", None)
+        socketio.emit("receiveOrder", createOrder,
+                      json=True, room=extraData["sid"])
+        return jsonify(createOrder)
+    return jsonify({"message": "Missing fields while creating order"}), 400
+
+
+@app.route('/orderOnline/getOrderCartManual', methods=['GET'])
+@cross_origin()
+@verify_token
+def getOrderCartManual():
+    orderId = request.args.get("orderId")
+    if not orderId:
+        return jsonify({"message": "Missing orderId field"}), 400
+
+    cart = mongo.db.order_cart.find_one({"orderId": orderId}, {"_id": 0})
+    if not cart:
+        return jsonify({"message": "Cart Empty"}), 400
+    items_dict = {}
+    for item in cart.get("items", []):
+        items_dict[item] = items_dict.get(item, 0)+1
+    items = [{"itemId": k, "qty": v} for k, v in items_dict.items()]
+    cart.update({"items": items})
+    return jsonify(cart)
+
+
+@app.route('/orderOnline/addToOrderCartManual', methods=['POST'])
+@cross_origin()
+@verify_token
+def addToOrderCartManual():
+    orderId = request.json.get("orderId")
+    if not orderId:
+        return jsonify({"message": "Missing orderId field"}), 400
+
+    itemId = request.json.get("itemId")
+    mongo.db.order_cart.update_one(
+        {"orderId": orderId},
+        {"$push": {
+            "items": itemId
+        }},
+        upsert=True)
+    return jsonify({"message": "Success"})
+
+
+@app.route('/orderOnline/removeFromOrderCartManual', methods=['POST'])
+@cross_origin()
+@verify_token
+def removeFromOrderCartManual():
+    orderId = request.json.get("orderId")
+    if not orderId:
+        return jsonify({"message": "Missing orderId field"}), 400
+
+    itemId = request.json.get("itemId")
+    cart = mongo.db.order_cart.find_one({"orderId": orderId}, {"_id": 0})
+    if not cart:
+        return jsonify({"message": "Cart Empty"}), 400
+    items = cart.get("items", [])
+    if itemId in items:
+        items.remove(itemId)
+    mongo.db.order_cart.update_one(
+        {"orderId": orderId},
+        {"$set": {
+            "items": items
+        }},
+        upsert=True)
+    return jsonify({"message": "Success"})
+
+
+@app.route('/orderOnline/newOrderId', methods=['GET'])
+@cross_origin()
+@verify_token
+def newOrderId():
+    orderId = {"orderId": generate_custom_id()}
+    mongo.db.online_orders.insert_one(orderId)
+    orderId.pop("_id", None)
+    return jsonify(orderId)
+
+
+@app.route('/orderOnline/placeOrderManual', methods=['POST'])
+@cross_origin()
+@verify_token
+def placeOrderManual():
+    data = request.json
+    valid_fields = [
+        "cartId",
+        "orderId",
+        "customerName",
+        "customerPhone",
+        "customerEmail",
+        "deliveryAddress",
+        "orderType",
+        "modeOfPayment",
+        "transactionId",
+        "manualBilling",
+        "packingCharge",
+        "deliveryCharge"]
+    if "orderType" not in data:
+        data["orderType"] = "delivery"
+    for field in ["transactionId", "customerEmail", "deliveryAddress"]:
+        if field not in data:
+            data[field] = ""
+    if "packingCharge" not in data:
+        data["packingCharge"] = 0.0
+    if "deliveryCharge" not in data:
+        data["deliveryCharge"] = 0.0
+    data["manualBilling"] = True
+    createOrder = {field: value for field,
+                   value in data.items() if field in valid_fields}
+
+    items_arr = []
+
+    if len(createOrder) == len(valid_fields):
+        orderId = createOrder['orderId']
+        cart = mongo.db.order_cart.find_one(
+            {"orderId": orderId}, {"_id": 0})
+        if not cart:
+            return jsonify({"message": "Cart Empty"}), 400
+        itemsDict = {}
+        for item in cart.get("items", []):
+            itemsDict[item] = itemsDict.get(item, 0)+1
+
+        data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
+        itemsList = list(itemsDict.keys())
+        data = mongo.db.menu.aggregate(
+            [
+                {
+                    "$match":
+                    {"cartId": data["cartId"]}
+                },
+                {"$unwind": "$menu"},
+                {
+                    "$match":
+                    {
+                        "menu.items.itemId": {"$in": itemsList}
+                    }
+                },
+                {"$unwind": "$menu.items"},
+                {
+                    "$match":
+                    {"menu.items.itemId": {"$in": itemsList}}
+                },
+                {
+                    "$project":
+                    {
+                        "_id": 0,
+                        "itemId": "$menu.items.itemId",
+                        "itemName": "$menu.items.name",
+                        "gst": 1,
+                        "sid": 1,
+                        "isActive": 1,
+                        "price": "$menu.items.price"
+                    }
+                }
+            ])
+        data = list(data)
+        if not data[0]["isActive"]:
+            return jsonify({"message": "Restaurant Offline"}), 400
+        extraData = {"subTotal": 0,
+                     "gst": data[0]["gst"]}
+        items_arr = []
+        for d in data:
+            qty = itemsDict.get(d["itemId"], 1)
+            extraData["subTotal"] += d["price"]*qty
+            items_arr.append(
+                {"itemId": d["itemId"], "itemName": d["itemName"],
+                 "price": d["price"], "qty": qty})
+        orderFields = {
+            "timestamp": int(round(time.time() * 1000)),
+            "orderStatus": "confirmed",
+            "subTotal": extraData["subTotal"],
+            "gst": extraData["gst"],
+            "manualBilling": True,
+            "total": round(
+                (1+extraData["gst"])*extraData["subTotal"], 2)
+        }
+        createOrder.update(orderFields)
+        createOrder["items"] = items_arr
+        mongo.db.online_orders.update_one(
+            {"orderId": orderId},
+            {"$set": createOrder})
+        mongo.db.daily_statistics.update_one({
+            "cartId": createOrder["cartId"],
+            "timestamp": datetime.combine(date.today(), datetime.min.time())
+        },
+            {
+                "$inc": {"dailyCount": 1}
+        },
+            upsert=True)
+        mongo.db.order_cart.delete_one({"orderId": orderId})
         return jsonify(createOrder)
     return jsonify({"message": "Missing fields while creating order"})
 
@@ -486,7 +687,7 @@ def updateOrderStatus():
                     "orderStatus": status
                 }})
             order_data_updated = mongo.db.online_orders.find_one(
-            {"orderId": orderId}, {"_id": 0})
+                {"orderId": orderId}, {"_id": 0})
             sid_list = mongo.db.menu.find_one(
                 {"cartId": order_data["cartId"]})["sid"]
             socketio.emit("receiveConfirmedOrder", order_data_updated,

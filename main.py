@@ -48,6 +48,7 @@ spring_url = "http://15.207.147.88:8080/"
 agreement_url = "http://15.207.147.88:8081/"
 mailer_url = "http://15.207.147.88:8080/"
 payment_url = "http://15.207.147.88:8083/"
+iot_api_url = "http://127.0.0.1:5002/"
 
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
@@ -300,7 +301,8 @@ def register(path):
             "lastName": lastName,
             "firebase_id": firebase_id,
             "roles": ['subscriber', 'customer'],
-            "exportedZoho": False
+            "exportedZoho": False,
+            "date": int(round(time.time() * 1000))
         }
 
         mongo.db.clients.insert_one(doc)
@@ -347,7 +349,8 @@ def register(path):
             "lastName": lastName,
             "firebase_id": firebase_id,
             "roles": ['customer'],
-            "exportedZoho": False
+            "exportedZoho": False,
+            "date": int(round(time.time() * 1000))
         }
         try:
             mongo.db.clients.insert_one(doc)
@@ -361,6 +364,27 @@ def register(path):
             })
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
+
+
+@app.route('/franchisee/convertToSubscriber', methods=['GET'])
+@cross_origin()
+@verify_token
+def convertToSubscriber():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
+    if "customer" in data["roles"]:
+        mongo.db.clients.update_one(
+            {'firebase_id': decoded['user_id']},
+            {'$addToSet': {
+                'roles': 'subscriber'
+            }})
+        return jsonify({"message": "Success"})
+    return jsonify({"message": "User is not customer"}), 401
 
 
 @app.route('/franchisee/login/<path:path>', methods=['POST'])
@@ -386,15 +410,15 @@ def login(path):
                     'mobile': data['mobile'],
                     'roles': data['roles']
                 })
+            # else:
+            #     if 'customer' in data['roles']:
+            #         mongo.db.clients.update_one(
+            #             {'firebase_id': decoded['user_id']},
+            #             {'$push': {
+            #                 'roles': 'subscriber'
+            #             }})
             else:
-                if 'customer' in data['roles']:
-                    mongo.db.clients.update_one(
-                        {'firebase_id': decoded['user_id']},
-                        {'$push': {
-                            'roles': 'subscriber'
-                        }})
-                else:
-                    return jsonify({'message': 'Unauthorised Access'}), 403
+                return jsonify({'message': 'Unauthorised Access'}), 403
         else:
             return jsonify({"message": "User not registered"}), 401
 
@@ -1080,25 +1104,54 @@ def uploadDocuments():
                             return jsonify({"message":
                                             "Some Error Occurred"}), 500
         mongo.db.clients.update_one({"email": email},
-                                            {"$addToSet": {
-                                                "roles": "franchisee"
-                                            }})
-        mongo.db.orders.update_one({"order_id": order_id},
-                                        {"$set": {
-                                            "status": "placed"
-                                        }})
+                                    {"$addToSet": {
+                                        "roles": "franchisee"
+                                    }})
+        order_data = mongo.db.orders.find_one_and_update(
+            {"order_id": order_id},
+            {"$set": {
+                "status": "placed"
+            }})
         mongo.db.order_history.insert_one({
-                    "order_id":
-                    order_id,
-                    "status":
-                    "placed",
-                    "date":
-                    int(round(time.time() * 1000))
-                })
+            "order_id": order_id,
+            "status": "placed",
+            "date": int(round(time.time() * 1000))
+        })
+        payload = {
+            "attachmentPaths": [],
+            "bccAddresses": [],
+            "ccAddresses": [],
+            "mailBody": "Your Order "+str(order_id)+" has been successfully placed.",
+            "mailSubject": "Order Successful",
+            "toAddresses": [email, "ceo@epanipuricart.com"]
+        }
+        requests.post(mailer_url + 'send-mail', json=payload)
+
+        # create Default Menu
+        device_data = mongo.db.device_ids.find_one({"order_id": order_id})
+        default_menu = cfg.DefaultMenu.copy()
+        for category in default_menu["menu"]:
+            category.update({"categoryId": generate_custom_id()})
+            for item in category["items"]:
+                item.update({"itemId": generate_custom_id()})
+        mongo.db.menu.insert_one({"cartId": device_data["device_id"]},
+                                 {"$set": default_menu})
+
+        # trigger iot register api
+        # model_uid = order_data.get("model_uid", 1)
+        # costing_data = mongo.db.costing.find_one({"modelType": model_uid})
+        # model_type = costing_data.get("extension").strip()[0]
+        # iot_data = {
+        #     "type": model_type,
+        #     "uid": device_data["device_id"],
+        #     "ownerType": 1
+        # }
+        # requests.post(iot_api_url+"/wizard/registerDevice", json=iot_data)
+
         return jsonify({"message": "Success"})
         # user_data = mongo.db.general_forms.find_one({"email": email})
         # docs_data = mongo.db.docs.find_one({"email": email})
-        # # base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
+        # base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
         # name = user_data['title'] + user_data['firstName'] + " " + user_data[
         #     'lastName']
         # aadhar = user_data['aadhar']
@@ -1321,13 +1374,15 @@ def uploadAgreement():
             email = orders_data['email']
             user_data = mongo.db.general_forms.find_one({"email": email})
             docs_data = mongo.db.docs.find_one({"order_id": orderId})
-            hash_data = mongo.db.hash_map.find_one({"transaction_id": orders_data['transaction_id']})
+            hash_data = mongo.db.hash_map.find_one(
+                {"transaction_id": orders_data['transaction_id']})
             # base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
             name = user_data['title'] + user_data['firstName'] + " " + user_data[
                 'lastName']
             aadhar = user_data['aadhar']
             brand = "E-Panipurii Kartz"
-            customer_id = mongo.db.device_ids.find_one({"order_id": orderId})['device_id']
+            customer_id = mongo.db.device_ids.find_one(
+                {"order_id": orderId})['device_id']
             model = "Table Top"
             model_extension = "3-nozzle system"
             fName = user_data['fatherName']
@@ -1337,11 +1392,11 @@ def uploadAgreement():
             mobile = user_data['mobile']
             amount = hash_data['amount']
             aadharLogoPath = os.path.join(app.config['UPLOAD_FOLDER'],
-                                        docs_data['aadhar'])
+                                          docs_data['aadhar'])
             ap = str(os.path.abspath(aadharLogoPath))
             #ap = str(aadharLogoPath)
             customerPhotoPath = os.path.join(app.config['UPLOAD_FOLDER'],
-                                            docs_data['photo'])
+                                             docs_data['photo'])
             cp = str(os.path.abspath(customerPhotoPath))
             #cp = str(customerPhotoPath)
             post = {
@@ -1369,14 +1424,17 @@ def uploadAgreement():
             try:
                 print(post)
                 response = requests.post(agreement_url + 'generate-agreement',
-                                        data=json.dumps(post),
-                                        headers=headers)
+                                         data=json.dumps(post),
+                                         headers=headers)
                 print(response.text)
-                
-                mongo.db.docs.update_one({"order_id": orderId},
-                                        {"$set": {
-                                            "pdf": str(response.text)
-                                        }})
+                resData = response.json()
+                mongo.db.digio_response.update_one({"order_id": orderId},
+                                                   {"$set": resData},
+                                                   upsert=True)
+                # mongo.db.docs.update_one({"order_id": orderId},
+                #                         {"$set": {
+                #                             "pdf": str(response.text)
+                #                         }})
                 # payload = {
                 #             "attachmentPaths": [
                 #                 response.text
@@ -1569,18 +1627,18 @@ def wizardLogin():
 @app.route('/franchisee/addAliasData', methods=['POST'])
 @cross_origin()
 def addAliasData():
-    alias_email = request.json['aliasEmail']
-    alias_name = request.json['aliasName']
     device_id = request.json['customerId']
     data = mongo.db.alias_data.find({'device_id': device_id}, {"_id": 0})
     if (len(list(data)) == 2):
         return jsonify({"message": "Cannot Add more data"}), 400
-    else:
-        mongo.db.alias_data.insert_one({
-            "device_id": device_id,
-            "alias_email": alias_email,
-            "alias_name": alias_name})
-        return jsonify({"message": "Succesfully added"})
+    alias_email = request.json['aliasEmail']
+    alias_name = request.json['aliasName']
+    mongo.db.alias_data.insert_one({
+        "alias_id": generate_custom_id(),
+        "device_id": device_id,
+        "alias_email": alias_email,
+        "alias_name": alias_name})
+    return jsonify({"message": "Succesfully added"})
 
 
 @app.route('/franchisee/getAliasData', methods=['GET'])
@@ -1593,6 +1651,33 @@ def getAliasData():
         return jsonify({"result": list(data)})
     else:
         return jsonify({"result": "No result found"}), 404
+
+
+@app.route('/franchisee/updateAliasData', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateAliasData():
+    aliasId = request.json.get("aliasId")
+    aliasName = request.json.get("aliasName")
+    if aliasId is None or aliasName is None:
+        return jsonify({"message": "No alias id/name sent"}), 400
+    mongo.db.alias_data.update_one(
+        {"alias_id": aliasId},
+        {
+            "$set": {"alias_name": aliasName}
+        })
+    return jsonify({"message": "Success"})
+
+
+@app.route('/franchisee/deleteAliasData', methods=['POST'])
+@cross_origin()
+@verify_token
+def deleteAliasData(field):
+    aliasId = request.json.get("aliasId")
+    if aliasId is None:
+        return jsonify({"message": "No alias id sent"}), 400
+    mongo.db.alias_data.delete_one({"alias_id": aliasId})
+    return jsonify({"message": "Success"})
 
 
 @app.route('/franchisee/getMenu', methods=['GET'])
@@ -2123,6 +2208,12 @@ def move_agreement_pdf():
     for file_name in file_names:
         shutil.move(os.path.join(source_dir, file_name), target_dir)
     print(str(len(file_names)) + " Moved!!")
+
+
+@scheduler.task('cron', id='clear_sid', minute=0, hour=2)
+def clear_sid():
+    mongo.db.menu.update_many({}, {"$set": {"sid": []}})
+    mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
 
 
 if __name__ == "__main__":

@@ -26,3 +26,65 @@ ZohoConfig = {
     "client_secret": "3e4811b9ced7df56e36e1e5090c49b012c03092fb9",
     "organization_id": "60003188756"
 }
+
+DefaultMenu = {
+    "cartName": "My Cart",
+    "deliveryCharge": 0,
+    "flatDiscount": 0,
+    "gst": 0,
+    "isActive": False,
+    "menu": [
+        {
+            "category": "Panipuri Shots",
+            "closeCategory": False,
+            "items": [
+                {
+                    "name": "Hingoli",
+                    "img": "",
+                    "desc": "",
+                    "price": 25,
+                    "ingredients": "",
+                    "customDiscount": "",
+                    "isOutOfStock": False,
+                    "gst": 0
+                },
+                {
+                    "name": "Lemon",
+                    "img": "",
+                    "desc": "",
+                    "price": 35,
+                    "ingredients": "",
+                    "customDiscount": "",
+                    "isOutOfStock": False,
+                    "gst": 0
+                }
+            ]
+        },
+        {
+            "category": "Panipuri Fills",
+            "closeCategory": False,
+            "items": [
+                {
+                    "name": "Pudina",
+                    "img": "",
+                    "desc": "",
+                    "price": 50,
+                    "ingredients": "",
+                    "customDiscount": "",
+                    "isOutOfStock": False,
+                    "gst": 0
+                },
+                {
+                    "name": "Hajmola",
+                    "img": "",
+                    "desc": "",
+                    "price": 40,
+                    "ingredients": "",
+                    "customDiscount": "",
+                    "isOutOfStock": False,
+                    "gst": 0
+                }
+            ]
+        }
+    ]
+}
