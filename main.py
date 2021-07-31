@@ -1141,12 +1141,15 @@ def uploadDocuments():
         model_uid = order_data.get("model_uid", 1)
         costing_data = mongo.db.costing.find_one({"modelType": model_uid})
         model_type = costing_data.get("extension").strip()[0]
+        client = mongo.db.general_forms.find_one({"email": email})
+        name = client.get("firstName", "") + " " + client.get("lastName", "")
         iot_data = {
             "type": model_type,
             "uid": device_data["device_id"],
             "ownerType": 1,
-            "owner": "",
-            "address": ""
+            "owner": name.strip(),
+            "address": ", ".join([device_data[key]
+                                  for key in ["location", "town", "state"]])
         }
         requests.post(iot_api_url+"/wizard/registerDevice", json=iot_data)
 
