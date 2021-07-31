@@ -708,16 +708,53 @@ def updateOrderStatus():
 def getOrderByTypeAndStatus():
     status = request.args.get("status")
     _type = request.args.get("type")
-    if status and _type:
-        orders = mongo.db.online_orders.find(
-            {"orderType": _type, "orderStatus": status},
-            {"_id": 0}).sort("timestamp", -1)
-        return jsonify({"orders": list(orders)})
-    return jsonify({"message": "No status/type arguments sent"}), 400
+    if not status:
+        return jsonify({"message": "No status arguments sent"}), 400
+    query = {"orderStatus": status}
+    if _type:
+        query.update({"orderType": _type})
+    orders = mongo.db.online_orders.find(
+        query, {"_id": 0}).sort("timestamp", -1)
+    return jsonify({"orders": list(orders)})
 
 
-@app.route('/orderOnline/generateInvoice', methods=['GET'])
+@app.route('/orderOnline/ongoingOrders', methods=['GET'])
 @cross_origin()
+@verify_token
+def ongoingOrders():
+    _type = request.args.get("type")
+    query = {
+        "$or": [
+            {"orderStatus": "pending"},
+            {"orderStatus": "confirmed"},
+            {"orderStatus": "dispatched"}
+        ]}
+    if _type and _type in ["dineIn", "delivery", "takeAway"]:
+        query.update({"orderType": _type})
+    orders = mongo.db.online_orders.find(
+        query, {"_id": 0}).sort("timestamp", -1)
+    return jsonify({"orders": list(orders)})
+
+
+@app.route('/orderOnline/declinesOrders', methods=['GET'])
+@cross_origin()
+@verify_token
+def declinesOrders():
+    _type = request.args.get("type")
+    query = {
+        "$or": [
+            {"orderStatus": "rejected"},
+            {"orderStatus": "canceled"}
+        ]}
+    if _type and _type in ["dineIn", "delivery", "takeAway"]:
+        query.update({"orderType": _type})
+    orders = mongo.db.online_orders.find(
+        query, {"_id": 0}).sort("timestamp", -1)
+    return jsonify({"orders": list(orders)})
+
+
+@ app.route('/orderOnline/generateInvoice', methods=['GET'])
+@ cross_origin()
 def generateInvoice():
     orderId = request.args.get("orderId")
     if not orderId:
@@ -775,9 +812,9 @@ def generateInvoice():
     return jsonify({"message": "Invalid ID"})
 
 
-@app.route('/orderOnline/getAddress', methods=['GET'])
-@cross_origin()
-@verify_token
+@ app.route('/orderOnline/getAddress', methods=['GET'])
+@ cross_origin()
+@ verify_token
 def getAddress():
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
@@ -792,9 +829,9 @@ def getAddress():
     return jsonify({"address": []})
 
 
-@app.route('/orderOnline/updateAddress/<field>', methods=['POST'])
-@cross_origin()
-@verify_token
+@ app.route('/orderOnline/updateAddress/<field>', methods=['POST'])
+@ cross_origin()
+@ verify_token
 def updateAddress(field):
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
@@ -850,15 +887,15 @@ def updateAddress(field):
     return jsonify({"message": "Success"})
 
 
-@socketio.on('connect')
+@ socketio.on('connect')
 def connected():
     print("SID is", request.sid)
     emit("myresponse", {"status": "connected"})
     return {}
 
 
-@socketio.on("registerSid")
-@cross_origin()
+@ socketio.on("registerSid")
+@ cross_origin()
 def registerSidEvent(data):
     cartId = data.get("cartId")
     print("CartID: ", cartId)
@@ -871,8 +908,8 @@ def registerSidEvent(data):
     return {}
 
 
-@socketio.on("registerSidByCustomer")
-@cross_origin()
+@ socketio.on("registerSidByCustomer")
+@ cross_origin()
 def registerSidByCustomer(data):
     token = data.get("token")
     print("Token: ", token)
@@ -890,8 +927,8 @@ def registerSidByCustomer(data):
     return {}
 
 
-@socketio.on("getOrderByOrderId")
-@cross_origin()
+@ socketio.on("getOrderByOrderId")
+@ cross_origin()
 def getOrderByOrderIdEvent(data):
     orderId = data.get("orderId")
     if orderId:
@@ -912,8 +949,8 @@ def getOrderByOrderIdEvent(data):
     return {}
 
 
-@socketio.on("allOrderStatus")
-@cross_origin()
+@ socketio.on("allOrderStatus")
+@ cross_origin()
 def allOrderStatusEvent(data):
     token = data.get("token")
     clientEmail = jwt.decode(token,
