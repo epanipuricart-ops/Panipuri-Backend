@@ -1138,15 +1138,17 @@ def uploadDocuments():
                                  {"$set": default_menu})
 
         # trigger iot register api
-        # model_uid = order_data.get("model_uid", 1)
-        # costing_data = mongo.db.costing.find_one({"modelType": model_uid})
-        # model_type = costing_data.get("extension").strip()[0]
-        # iot_data = {
-        #     "type": model_type,
-        #     "uid": device_data["device_id"],
-        #     "ownerType": 1
-        # }
-        # requests.post(iot_api_url+"/wizard/registerDevice", json=iot_data)
+        model_uid = order_data.get("model_uid", 1)
+        costing_data = mongo.db.costing.find_one({"modelType": model_uid})
+        model_type = costing_data.get("extension").strip()[0]
+        iot_data = {
+            "type": model_type,
+            "uid": device_data["device_id"],
+            "ownerType": 1,
+            "owner": "",
+            "address": ""
+        }
+        requests.post(iot_api_url+"/wizard/registerDevice", json=iot_data)
 
         return jsonify({"message": "Success"})
         # user_data = mongo.db.general_forms.find_one({"email": email})
