@@ -471,7 +471,7 @@ def getOrderCartManual():
 
     cart = mongo.db.order_cart.find_one({"orderId": orderId}, {"_id": 0})
     if not cart:
-        return jsonify({"message": "Cart Empty"}), 400
+        return jsonify({"items": []})
     items_dict = {}
     for item in cart.get("items", []):
         items_dict[item] = items_dict.get(item, 0)+1
