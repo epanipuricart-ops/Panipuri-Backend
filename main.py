@@ -9,7 +9,7 @@ import time
 import os
 import binascii
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timedelta
 import config.config as cfg
 from modules import *
 import firebase_admin
@@ -2219,6 +2219,50 @@ def move_agreement_pdf():
 def clear_sid():
     mongo.db.menu.update_many({}, {"$set": {"sid": []}})
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
+
+
+@scheduler.task('cron', id='remind_otp', minute=0)
+def remind_otp():
+    while True:
+        otpData = mongo.db.otpRegistration.find_one_and_update({
+            "active": 1,
+            "created": {"$lt": datetime.now() - timedelta(minutes=10)},
+            "reminded": {"$ne": True}
+        },
+            {
+                "$set": {"reminded": True}
+        })
+        if not otpData:
+            break
+        client = mongo.db.general_forms.find_one({"email": otpData["email"]})
+
+        # whatsapp message
+        data = {
+            "message": "You have not yet completed your registration.",
+            "phone": otpData["phone_number"],
+            "name": client.get("firstName", ""),
+            "email": otpData["email"],
+            "type": 1
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        requests.post(spring_url +
+                      'api/message/send-message',
+                      data=json.dumps(data),
+                      headers=headers)
+
+        # email
+        payload = {
+            "attachmentPaths": [],
+            "bccAddresses": [],
+            "ccAddresses": [],
+            "mailBody": "You have not yet completed your registration.",
+            "mailSubject": "Registration Pending",
+            "toAddresses": [otpData["email"]]
+        }
+        requests.post(mailer_url + 'send-mail', json=payload)
 
 
 if __name__ == "__main__":
