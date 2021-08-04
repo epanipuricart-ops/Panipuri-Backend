@@ -410,15 +410,10 @@ def login(path):
                     'mobile': data['mobile'],
                     'roles': data['roles']
                 })
-            # else:
-            #     if 'customer' in data['roles']:
-            #         mongo.db.clients.update_one(
-            #             {'firebase_id': decoded['user_id']},
-            #             {'$push': {
-            #                 'roles': 'subscriber'
-            #             }})
             else:
-                return jsonify({'message': 'Unauthorised Access'}), 403
+                if ('customer' in data['roles']) and (len(data['roles']) ==1):
+                    return jsonify({"message": "Convert to subscriber"}), 201
+                    
         else:
             return jsonify({"message": "User not registered"}), 401
 
@@ -1604,7 +1599,7 @@ def getCartId():
     return jsonify({"result": list(all_carts)})
 
 
-@app.route('/login/wizard', methods=['POST'])
+@app.route('/franchisee/login/wizard', methods=['POST'])
 @cross_origin()
 def wizardLogin():
     email = request.json['email']
@@ -1677,7 +1672,7 @@ def updateAliasData():
 @app.route('/franchisee/deleteAliasData', methods=['POST'])
 @cross_origin()
 @verify_token
-def deleteAliasData(field):
+def deleteAliasData():
     aliasId = request.json.get("aliasId")
     if aliasId is None:
         return jsonify({"message": "No alias id sent"}), 400

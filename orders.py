@@ -736,7 +736,7 @@ def ongoingOrders():
     return jsonify({"orders": list(orders)})
 
 
-@app.route('/orderOnline/declinesOrders', methods=['GET'])
+@app.route('/orderOnline/declinedOrders', methods=['GET'])
 @cross_origin()
 @verify_token
 def declinesOrders():
