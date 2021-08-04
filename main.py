@@ -2224,47 +2224,47 @@ def clear_sid():
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
 
 
-@scheduler.task('cron', id='remind_otp', minute=0)
-def remind_otp():
-    while True:
-        otpData = mongo.db.otpRegistration.find_one_and_update({
-            "active": 1,
-            "created": {"$lt": datetime.now() - timedelta(minutes=10)},
-            "reminded": {"$ne": True}
-        },
-            {
-                "$set": {"reminded": True}
-        })
-        if not otpData:
-            break
+# @scheduler.task('cron', id='remind_otp', minute=0)
+# def remind_otp():
+#     while True:
+#         otpData = mongo.db.otpRegistration.find_one_and_update({
+#             "active": 1,
+#             "created": {"$lt": datetime.now() - timedelta(minutes=10)},
+#             "reminded": {"$ne": True}
+#         },
+#             {
+#                 "$set": {"reminded": True}
+#         })
+#         if not otpData:
+#             break
 
-        # whatsapp message
-        data = {
-            "message": "You have not yet completed your registration.",
-            "phone": otpData["phone_number"],
-            "name": "User",
-            "email": otpData["email"],
-            "type": 1
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-        requests.post(spring_url +
-                      'api/message/send-registration-otp',
-                      data=json.dumps(data),
-                      headers=headers)
+#         # whatsapp message
+#         data = {
+#             "message": "You have not yet completed your registration.",
+#             "phone": otpData["phone_number"],
+#             "name": "User",
+#             "email": otpData["email"],
+#             "type": 1
+#         }
+#         headers = {
+#             "Content-Type": "application/json",
+#             "Accept": "application/json",
+#         }
+#         requests.post(spring_url +
+#                       'api/message/send-registration-otp',
+#                       data=json.dumps(data),
+#                       headers=headers)
 
-        # email
-        payload = {
-            "attachmentPaths": [],
-            "bccAddresses": [],
-            "ccAddresses": [],
-            "mailBody": "You have not yet completed your registration.",
-            "mailSubject": "Registration Pending",
-            "toAddresses": [otpData["email"]]
-        }
-        requests.post(mailer_url + 'send-mail', json=payload)
+#         # email
+#         payload = {
+#             "attachmentPaths": [],
+#             "bccAddresses": [],
+#             "ccAddresses": [],
+#             "mailBody": "You have not yet completed your registration.",
+#             "mailSubject": "Registration Pending",
+#             "toAddresses": [otpData["email"]]
+#         }
+#         requests.post(mailer_url + 'send-mail', json=payload)
 
 
 if __name__ == "__main__":
