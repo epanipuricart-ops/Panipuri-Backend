@@ -255,7 +255,32 @@ def sendOTP():
                                  data=json.dumps(data),
                                  headers=headers)
         return json.loads(response.text)
-    except:
+    except Exception:
+        return jsonify({"message": "Some Error Occurred"}), 500
+
+
+@app.route('/orderOnline/verifyOTP', methods=['POST'])
+@cross_origin()
+def verifyOTP():
+    if (
+        'phone' not in request.json
+        or 'token' not in request.json
+        or 'otp' not in request.json
+    ):
+        return jsonify({"message": "Missing Parameters"}), 400
+    phone = request.json['phone']
+    token = request.json['token']
+    otp = request.json['otp']
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    try:
+        target_url = 'api/message/verify-order-otp/{}/phone/{}/otp/{}'.format(
+            token, phone, otp)
+        response = requests.get(spring_url + target_url, headers=headers)
+        return json.loads(response.text)
+    except Exception:
         return jsonify({"message": "Some Error Occurred"}), 500
 
 

@@ -558,7 +558,7 @@ def verifyOTP():
             "Accept": "application/json",
         }
         try:
-            target_url = 'api/message/verify-otp/{}/phone/{}/otp/{}'.format(
+            target_url = 'api/message/verify-registration-otp/{}/phone/{}/otp/{}'.format(
                 token, phone, otp)
             response = requests.get(spring_url + target_url, headers=headers)
             json_resp = json.loads(response.text)
