@@ -9,7 +9,7 @@ import time
 import os
 import binascii
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timedelta
 import config.config as cfg
 from modules import *
 import firebase_admin
@@ -48,7 +48,7 @@ spring_url = "http://15.207.147.88:8080/"
 agreement_url = "http://15.207.147.88:8081/"
 mailer_url = "http://15.207.147.88:8080/"
 payment_url = "http://15.207.147.88:8083/"
-iot_api_url = "http://127.0.0.1:5002/"
+iot_api_url = "http://15.207.147.88:5002/"
 
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
@@ -494,6 +494,12 @@ def getProfile():
         return jsonify({"message": "Some error occurred"}), 500
 
 
+@app.route('/franchisee/getLogo', methods=['GET'])
+@cross_origin()
+def getLogo():
+    return send_from_directory(".", "logo.png")
+
+
 @app.route('/franchisee/sendOTP', methods=['POST'])
 @cross_origin()
 def sendOTP():
@@ -506,7 +512,9 @@ def sendOTP():
         firstName = request.json['firstName']
         lastName = request.json['lastName']
         data = {"message": msg, "phone": phone, "name": firstName,
-                "email": email, "type": typeOfMessage}
+                "email": email, "type": typeOfMessage,
+                "mediaUrl": "http://15.207.147.88:5000/franchisee/getLogo"
+                }
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -525,7 +533,7 @@ def sendOTP():
         else:
             try:
                 response = requests.post(spring_url +
-                                         'api/message/send-message',
+                                         'api/message/send-registration-otp',
                                          data=json.dumps(data),
                                          headers=headers)
                 json_resp = json.loads(response.text)
@@ -550,7 +558,7 @@ def verifyOTP():
             "Accept": "application/json",
         }
         try:
-            target_url = 'api/message/verify-otp/{}/phone/{}/otp/{}'.format(
+            target_url = 'api/message/verify-registration-otp/{}/phone/{}/otp/{}'.format(
                 token, phone, otp)
             response = requests.get(spring_url + target_url, headers=headers)
             json_resp = json.loads(response.text)
@@ -2219,6 +2227,49 @@ def move_agreement_pdf():
 def clear_sid():
     mongo.db.menu.update_many({}, {"$set": {"sid": []}})
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
+
+
+@scheduler.task('cron', id='remind_otp', minute=0)
+def remind_otp():
+    while True:
+        otpData = mongo.db.otpRegistration.find_one_and_update({
+            "active": 1,
+            "created": {"$lt": datetime.now() - timedelta(minutes=10)},
+            "reminded": {"$ne": True}
+        },
+            {
+                "$set": {"reminded": True}
+        })
+        if not otpData:
+            break
+
+        # whatsapp message
+        data = {
+            "message": "You have not yet completed your registration.",
+            "phone": otpData["phone_number"],
+            "name": "User",
+            "email": otpData["email"],
+            "type": 1
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        requests.post(spring_url +
+                      'api/message/send-registration-otp',
+                      data=json.dumps(data),
+                      headers=headers)
+
+        # email
+        payload = {
+            "attachmentPaths": [],
+            "bccAddresses": [],
+            "ccAddresses": [],
+            "mailBody": "You have not yet completed your registration.",
+            "mailSubject": "Registration Pending",
+            "toAddresses": [otpData["email"]]
+        }
+        requests.post(mailer_url + 'send-mail', json=payload)
 
 
 if __name__ == "__main__":
