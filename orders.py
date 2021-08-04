@@ -239,7 +239,6 @@ def sendOTP():
     email = request.json['email']
     # email = 'jyotimay16@gmail.com'
     firstName = request.json['firstName']
-    lastName = request.json['lastName']
     msg = "__OTP__ is your One Time Password for phone verification"
     typeOfMessage = 1
     data = {"message": msg, "phone": phone, "name": firstName,
@@ -250,16 +249,9 @@ def sendOTP():
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    rec = {
-        'firstName': firstName,
-        'lastName': lastName,
-        'email': email,
-        'mobile': phone
-    }
-    mongo.db.clients.find_one({"mobile": phone})
     try:
         response = requests.post(spring_url +
-                                 'api/message/send-registration-otp',
+                                 'api/message/send-order-otp',
                                  data=json.dumps(data),
                                  headers=headers)
         return json.loads(response.text)
