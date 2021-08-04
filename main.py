@@ -48,7 +48,7 @@ spring_url = "http://15.207.147.88:8080/"
 agreement_url = "http://15.207.147.88:8081/"
 mailer_url = "http://15.207.147.88:8080/"
 payment_url = "http://15.207.147.88:8083/"
-iot_api_url = "http://127.0.0.1:5002/"
+iot_api_url = "http://15.207.147.88:5002/"
 
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
@@ -494,6 +494,12 @@ def getProfile():
         return jsonify({"message": "Some error occurred"}), 500
 
 
+@app.route('/franchisee/getLogo', methods=['GET'])
+@cross_origin()
+def getLogo():
+    return send_from_directory(".", "logo.png")
+
+
 @app.route('/franchisee/sendOTP', methods=['POST'])
 @cross_origin()
 def sendOTP():
@@ -506,7 +512,9 @@ def sendOTP():
         firstName = request.json['firstName']
         lastName = request.json['lastName']
         data = {"message": msg, "phone": phone, "name": firstName,
-                "email": email, "type": typeOfMessage}
+                "email": email, "type": typeOfMessage,
+                "mediaUrl": "http://15.207.147.88:5000/franchisee/getLogo"
+                }
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -525,7 +533,7 @@ def sendOTP():
         else:
             try:
                 response = requests.post(spring_url +
-                                         'api/message/send-message',
+                                         'api/message/send-registration-otp',
                                          data=json.dumps(data),
                                          headers=headers)
                 json_resp = json.loads(response.text)
@@ -2234,13 +2242,12 @@ def remind_otp():
         })
         if not otpData:
             break
-        client = mongo.db.general_forms.find_one({"email": otpData["email"]})
 
         # whatsapp message
         data = {
             "message": "You have not yet completed your registration.",
             "phone": otpData["phone_number"],
-            "name": client.get("firstName", ""),
+            "name": "User",
             "email": otpData["email"],
             "type": 1
         }
@@ -2249,7 +2256,7 @@ def remind_otp():
             "Accept": "application/json",
         }
         requests.post(spring_url +
-                      'api/message/send-message',
+                      'api/message/send-registration-otp',
                       data=json.dumps(data),
                       headers=headers)
 

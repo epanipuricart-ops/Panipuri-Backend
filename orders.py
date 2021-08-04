@@ -15,6 +15,7 @@ from functools import wraps
 from config import config as cfg
 import re
 import subprocess
+import requests
 
 
 INVOICE_PDF_FOLDER = 'public/invoice_pdf'
@@ -32,6 +33,9 @@ socketio = SocketIO(app, cors_allowed_origins="*",
 cred = credentials.Certificate('config/fbAdminSecret.json')
 firebase = firebase_admin.initialize_app(cred)
 pb = pyrebase.initialize_app(json.load(open('config/fbConfig.json')))
+
+
+spring_url = "http://15.207.147.88:8080/"
 
 
 def verify_token(f):
@@ -224,6 +228,43 @@ def deleteMenu(field):
     else:
         return jsonify({"message": "Invalid field"}), 400
     return jsonify({"message": "Sucess"})
+
+
+@app.route('/orderOnline/sendOTP', methods=['POST'])
+@cross_origin()
+def sendOTP():
+    if 'phone' not in request.json:
+        return jsonify({"message": "Missing Parameters"}), 400
+    phone = request.json['phone']
+    email = request.json['email']
+    # email = 'jyotimay16@gmail.com'
+    firstName = request.json['firstName']
+    lastName = request.json['lastName']
+    msg = "__OTP__ is your One Time Password for phone verification"
+    typeOfMessage = 1
+    data = {"message": msg, "phone": phone, "name": firstName,
+            "email": email, "type": typeOfMessage,
+            "mediaUrl": "http://15.207.147.88:5000/franchisee/getLogo"
+            }
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    rec = {
+        'firstName': firstName,
+        'lastName': lastName,
+        'email': email,
+        'mobile': phone
+    }
+    mongo.db.clients.find_one({"mobile": phone})
+    try:
+        response = requests.post(spring_url +
+                                 'api/message/send-registration-otp',
+                                 data=json.dumps(data),
+                                 headers=headers)
+        return json.loads(response.text)
+    except:
+        return jsonify({"message": "Some Error Occurred"}), 500
 
 
 @app.route('/orderOnline/getAllLocations', methods=['GET'])
@@ -753,8 +794,8 @@ def declinesOrders():
     return jsonify({"orders": list(orders)})
 
 
-@ app.route('/orderOnline/generateInvoice', methods=['GET'])
-@ cross_origin()
+@app.route('/orderOnline/generateInvoice', methods=['GET'])
+@cross_origin()
 def generateInvoice():
     orderId = request.args.get("orderId")
     if not orderId:
@@ -812,9 +853,9 @@ def generateInvoice():
     return jsonify({"message": "Invalid ID"})
 
 
-@ app.route('/orderOnline/getAddress', methods=['GET'])
-@ cross_origin()
-@ verify_token
+@app.route('/orderOnline/getAddress', methods=['GET'])
+@cross_origin()
+@verify_token
 def getAddress():
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
@@ -829,9 +870,9 @@ def getAddress():
     return jsonify({"address": []})
 
 
-@ app.route('/orderOnline/updateAddress/<field>', methods=['POST'])
-@ cross_origin()
-@ verify_token
+@app.route('/orderOnline/updateAddress/<field>', methods=['POST'])
+@cross_origin()
+@verify_token
 def updateAddress(field):
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
@@ -887,15 +928,15 @@ def updateAddress(field):
     return jsonify({"message": "Success"})
 
 
-@ socketio.on('connect')
+@socketio.on('connect')
 def connected():
     print("SID is", request.sid)
     emit("myresponse", {"status": "connected"})
     return {}
 
 
-@ socketio.on("registerSid")
-@ cross_origin()
+@socketio.on("registerSid")
+@cross_origin()
 def registerSidEvent(data):
     cartId = data.get("cartId")
     print("CartID: ", cartId)
@@ -908,8 +949,8 @@ def registerSidEvent(data):
     return {}
 
 
-@ socketio.on("registerSidByCustomer")
-@ cross_origin()
+@socketio.on("registerSidByCustomer")
+@cross_origin()
 def registerSidByCustomer(data):
     token = data.get("token")
     print("Token: ", token)
@@ -927,8 +968,8 @@ def registerSidByCustomer(data):
     return {}
 
 
-@ socketio.on("getOrderByOrderId")
-@ cross_origin()
+@socketio.on("getOrderByOrderId")
+@cross_origin()
 def getOrderByOrderIdEvent(data):
     orderId = data.get("orderId")
     if orderId:
