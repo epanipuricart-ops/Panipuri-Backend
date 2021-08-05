@@ -407,9 +407,6 @@ def placeOrder():
     email = decoded['email']
     valid_fields = [
         "cartId",
-        "customerName",
-        "customerPhone",
-        "customerEmail",
         "deliveryAddress",
         "orderType",
         "modeOfPayment",
@@ -429,11 +426,11 @@ def placeOrder():
     data.update({"customerName": customerName, "customerEmail": email,
                  "customerPhone": customerData.get("mobile")})
     createOrder = {field: value for field,
-                   value in data.items() if field in valid_fields}
+                   value in data.items()}
 
     items_arr = []
 
-    if len(createOrder) == len(valid_fields):
+    if True:
         email = createOrder['customerEmail']
         cart = mongo.db.order_cart.find_one(
             {"email": email}, {"_id": 0})
@@ -484,7 +481,7 @@ def placeOrder():
         items_arr = []
         for d in data:
             qty = itemsDict.get(d["itemId"], 1)
-            extraData["subTotal"] += d["price"]*qty
+            extraData["subTotal"] += float(d["price"])*int(qty)
             items_arr.append(
                 {"itemId": d["itemId"], "itemName": d["itemName"],
                  "price": d["price"], "qty": qty})
@@ -673,8 +670,8 @@ def placeOrderManual():
                      "gst": data[0]["gst"]}
         items_arr = []
         for d in data:
-            qty = itemsDict.get(d["itemId"], 1)
-            extraData["subTotal"] += d["price"]*qty
+            qty = int(itemsDict.get(d["itemId"], 1))
+            extraData["subTotal"] += float(d["price"])*qty
             items_arr.append(
                 {"itemId": d["itemId"], "itemName": d["itemName"],
                  "price": d["price"], "qty": qty})
