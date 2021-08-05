@@ -2229,7 +2229,7 @@ def clear_sid():
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
 
 
-@scheduler.task('cron', id='remind_otp', minute=0)
+# @scheduler.task('cron', id='remind_otp', minute=0)
 def remind_otp():
     while True:
         otpData = mongo.db.otpRegistration.find_one_and_update({
