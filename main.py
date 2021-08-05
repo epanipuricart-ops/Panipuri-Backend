@@ -411,9 +411,9 @@ def login(path):
                     'roles': data['roles']
                 })
             else:
-                if ('customer' in data['roles']) and (len(data['roles']) ==1):
+                if ('customer' in data['roles']) and (len(data['roles']) == 1):
                     return jsonify({"message": "Convert to subscriber"}), 201
-                    
+
         else:
             return jsonify({"message": "User not registered"}), 401
 
@@ -2273,7 +2273,6 @@ def remind_otp():
                 "toAddresses": [otpData["email"]]
             }
             requests.post(mailer_url + 'send-mail', json=payload)
-
 
 
 if __name__ == "__main__":
