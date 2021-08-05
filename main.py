@@ -2224,47 +2224,56 @@ def clear_sid():
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
 
 
-# @scheduler.task('cron', id='remind_otp', minute=0)
-# def remind_otp():
-#     while True:
-#         otpData = mongo.db.otpRegistration.find_one_and_update({
-#             "active": 1,
-#             "created": {"$lt": datetime.now() - timedelta(minutes=10)},
-#             "reminded": {"$ne": True}
-#         },
-#             {
-#                 "$set": {"reminded": True}
-#         })
-#         if not otpData:
-#             break
+@scheduler.task('cron', id='remind_otp', minute=0)
+def remind_otp():
 
-#         # whatsapp message
-#         data = {
-#             "message": "You have not yet completed your registration.",
-#             "phone": otpData["phone_number"],
-#             "name": "User",
-#             "email": otpData["email"],
-#             "type": 1
-#         }
-#         headers = {
-#             "Content-Type": "application/json",
-#             "Accept": "application/json",
-#         }
-#         requests.post(spring_url +
-#                       'api/message/send-registration-otp',
-#                       data=json.dumps(data),
-#                       headers=headers)
+    otpDataList = mongo.db.otpRegistration.find({
+        "active": 1,
+        "created": {"$lt": datetime.now() - timedelta(minutes=10)},
+        "reminded": {"$ne": True}
+    })
+    otpDataList = list(otpDataList)
+    sent_numbers = list()
+    for otpData in otpDataList:
+        phone_number = otpData["phone_number"]
+        if phone_number not in sent_numbers:
+            sent_numbers.append(phone_number)
+            mongo.db.otpRegistration.update({
+                "phone_number": phone_number
+            },
+                {
+                    "$set": {"reminded": True}
+            })
+            data = {
+                "message": "You have not yet completed your registration.",
+                "phone": phone_number,
+                "name": "User",
+                "email": otpData["email"],
+                "type": 1,
+                "mediaUrl": "http://15.207.147.88:5000/franchisee/getLogo"
+            }
 
-#         # email
-#         payload = {
-#             "attachmentPaths": [],
-#             "bccAddresses": [],
-#             "ccAddresses": [],
-#             "mailBody": "You have not yet completed your registration.",
-#             "mailSubject": "Registration Pending",
-#             "toAddresses": [otpData["email"]]
-#         }
-#         requests.post(mailer_url + 'send-mail', json=payload)
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            # whatsapp message
+            requests.post(spring_url +
+                          'api/message/send-registration-otp',
+                          data=json.dumps(data),
+                          headers=headers)
+
+            # email
+            payload = {
+                "attachmentPaths": [],
+                "bccAddresses": [],
+                "ccAddresses": [],
+                "mailBody": "You have not yet completed your registration.",
+                "mailSubject": "Registration Pending",
+                "toAddresses": [otpData["email"]]
+            }
+            requests.post(mailer_url + 'send-mail', json=payload)
+
 
 
 if __name__ == "__main__":
