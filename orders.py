@@ -763,9 +763,10 @@ def updateOrderStatus():
 def getOrderByTypeAndStatus():
     status = request.args.get("status")
     _type = request.args.get("type")
+    cartId = request.args.get("cartId")
     if not status:
         return jsonify({"message": "No status arguments sent"}), 400
-    query = {"orderStatus": status}
+    query = {"orderStatus": status, "cartId": cartId}
     if _type:
         query.update({"orderType": _type})
     orders = mongo.db.online_orders.find(
@@ -778,12 +779,15 @@ def getOrderByTypeAndStatus():
 @verify_token
 def ongoingOrders():
     _type = request.args.get("type")
+    cartId = request.args.get("cartId")
     query = {
         "$or": [
             {"orderStatus": "pending"},
             {"orderStatus": "confirmed"},
             {"orderStatus": "dispatched"}
-        ]}
+        ],
+        "cartId": cartId
+    }
     if _type and _type in ["dineIn", "delivery", "takeAway"]:
         query.update({"orderType": _type})
     orders = mongo.db.online_orders.find(
@@ -796,11 +800,14 @@ def ongoingOrders():
 @verify_token
 def declinesOrders():
     _type = request.args.get("type")
+    cartId = request.args.get("cartId")
     query = {
         "$or": [
             {"orderStatus": "rejected"},
             {"orderStatus": "canceled"}
-        ]}
+        ],
+        "cartId": cartId
+    }
     if _type and _type in ["dineIn", "delivery", "takeAway"]:
         query.update({"orderType": _type})
     orders = mongo.db.online_orders.find(
