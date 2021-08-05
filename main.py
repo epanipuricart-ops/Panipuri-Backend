@@ -2224,7 +2224,7 @@ def clear_sid():
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
 
 
-# @scheduler.task('cron', id='remind_otp', minute=0)
+@scheduler.task('cron', id='remind_otp', minute=0)
 def remind_otp():
 
     otpDataList = mongo.db.otpRegistration.find({
@@ -2259,7 +2259,7 @@ def remind_otp():
             }
             # whatsapp message
             requests.post(spring_url +
-                          'api/message/send-registration-otp',
+                          'api/message/send-order-reminder',
                           data=json.dumps(data),
                           headers=headers)
 
