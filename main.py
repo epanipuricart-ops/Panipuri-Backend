@@ -2078,6 +2078,28 @@ def sendSalesOrder():
     return jsonify({"message": "Success"})
 
 
+@app.route('/franchisee/updateProfile', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateProfile():
+    data = request.json
+    cartId = data.get("cartId")
+    if not cartId:
+        return jsonify({"message": "No cartId sent"}), 400
+    valid_fields = ["email", "location", "google_location"]
+    updateItem = {field: value for field,
+                  value in data.items() if field in valid_fields}
+    mongo.db.device_ids.update_one(
+        {
+            "device_id": cartId
+        },
+        {
+            "$set": updateItem
+        }
+    )
+    return jsonify({"message": "Success"})
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 @cross_origin()
 def upload():
