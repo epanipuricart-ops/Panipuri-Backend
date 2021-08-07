@@ -515,6 +515,39 @@ def placeOrder():
         return jsonify(createOrder)
     return jsonify({"message": "Missing fields while creating order"}), 400
 
+@app.route('/orderOnline/getStatistics', methods=['GET'])
+@cross_origin()
+@verify_token
+def getStatistics():
+    cartId = request.args.get("cartId")
+    data = mongo.db.daily_statistics.find(
+        {"cartId": cartId},
+        {"_id": 0, "cartId": 0}).sort("timestamp", -1)
+    newData = []
+    for rec in data:
+        rec["timestamp"] = rec["timestamp"].strftime("%d-%m-%Y")
+        newData.append(rec)
+    return jsonify({"stats": newData})
+
+@app.route('/orderOnline/generateStatistics', methods=['POST'])
+@cross_origin()
+@verify_token
+def generateStatistics():
+    cartId = request.json.get("cartId")
+    startms = request.json.get("startms")
+    endms = request.json.get("endms")
+    items = mongo.db.online_orders.find({
+        "cartId": cartId,
+        "timestamp": {"$gt":  startms, "$lt": endms}
+    },
+        {"_id": 0, "items": 1})
+    sales = {}
+    for itemrow in items:
+        for item in itemrow["items"]:
+            name = item["itemName"]
+            sales[name] = sales.get(name, 0)+item["qty"]
+    max_sales = max(sales, key=sales.get)
+    return jsonify({"sales": sales, "max_sales_item": max_sales})
 
 @app.route('/orderOnline/getOrderCartManual', methods=['GET'])
 @cross_origin()

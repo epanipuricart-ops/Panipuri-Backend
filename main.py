@@ -2086,7 +2086,7 @@ def updateProfile():
     cartId = data.get("cartId")
     if not cartId:
         return jsonify({"message": "No cartId sent"}), 400
-    valid_fields = ["email", "location", "google_location"]
+    valid_fields = [ "location", "google_location","gstin","fssai"]
     updateItem = {field: value for field,
                   value in data.items() if field in valid_fields}
     mongo.db.device_ids.update_one(
@@ -2098,6 +2098,16 @@ def updateProfile():
         }
     )
     return jsonify({"message": "Success"})
+
+@app.route('/franchisee/getCartProfile', methods=['GET'])
+@cross_origin()
+@verify_token
+def updateProfile():
+    cartId = request.args.get("cartId")
+    if not cartId:
+        return jsonify({"message": "No cartId sent"}), 400
+    data =  mongo.db.device_ids.find_one({"device_id": cartId},{"_id": 0})
+    return data
 
 
 @app.route('/upload', methods=['GET', 'POST'])
@@ -2261,7 +2271,7 @@ def clear_sid():
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
 
 
-@scheduler.task('cron', id='remind_otp', minute=0)
+#@scheduler.task('cron', id='remind_otp', minute=0)
 def remind_otp():
 
     otpDataList = mongo.db.otpRegistration.find({
