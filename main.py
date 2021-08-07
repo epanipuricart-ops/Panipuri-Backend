@@ -2189,6 +2189,21 @@ def getSwitchStatus():
     else:
         return jsonify({"message": "Invalid Device Id"}), 403
 
+@app.route("/postDeviceStatus", methods=['GET', 'POST'])
+@cross_origin()
+def postDeviceStatus():
+    if request.method == "POST":
+        uid = request.json["uid"]
+        deviceStatus = request.json["status"]
+        try:
+            mongo.db.devices.update_one(
+                {"uid": uid}, {'$set': {"deviceState": deviceStatus}})
+        except:
+            print("Error!")
+        return jsonify({"message": "SUCCESS"})
+    else:
+        return jsonify({"message": "Authorization Error"}), 403
+
 
 # @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
 # def zoho_crm_create():
