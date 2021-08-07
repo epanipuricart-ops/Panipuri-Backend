@@ -1001,6 +1001,23 @@ def updateAddress(field):
     return jsonify({"message": "Success"})
 
 
+@app.route('/orderOnline/getOrderDetails', methods=['GET'])
+@cross_origin()
+def getOrderDetails():
+    orderId = request.args.get("orderId")
+    if orderId:
+        orderInfo = mongo.db.online_orders.find_one(
+            {"orderId": orderId},
+            {"_id": 0})
+        storeInfo = mongo.db.device_ids.find_one(
+            {"device_id": orderInfo['cartId']},
+            {"_id": 0}
+        )
+        orderInfo.update({"storeInfo": storeInfo})
+        return jsonify(orderInfo)
+    return jsonify({"message": "No orderId sent"})
+
+
 @socketio.on('connect')
 def connected():
     print("SID is", request.sid)
