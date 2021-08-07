@@ -785,8 +785,9 @@ def ongoingOrders():
             {"orderStatus": "pending"},
             {"orderStatus": "confirmed"},
             {"orderStatus": "dispatched"}
-        ]}
-    query.update({ "cartId": cartId})
+        ],
+        "cartId": cartId
+    }
     if _type and _type in ["dineIn", "delivery", "takeAway"]:
         query.update({"orderType": _type})
     orders = mongo.db.online_orders.find(
@@ -804,8 +805,9 @@ def declinesOrders():
         "$or": [
             {"orderStatus": "rejected"},
             {"orderStatus": "canceled"}
-        ]}
-    query.update({ "cartId": cartId})
+        ],
+        "cartId": cartId
+    }
     if _type and _type in ["dineIn", "delivery", "takeAway"]:
         query.update({"orderType": _type})
     orders = mongo.db.online_orders.find(

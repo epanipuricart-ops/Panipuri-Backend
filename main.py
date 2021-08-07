@@ -411,9 +411,9 @@ def login(path):
                     'roles': data['roles']
                 })
             else:
-                if ('customer' in data['roles']) and (len(data['roles']) ==1):
+                if ('customer' in data['roles']) and (len(data['roles']) == 1):
                     return jsonify({"message": "Convert to subscriber"}), 201
-                    
+
         else:
             return jsonify({"message": "User not registered"}), 401
 
@@ -2078,6 +2078,28 @@ def sendSalesOrder():
     return jsonify({"message": "Success"})
 
 
+@app.route('/franchisee/updateProfile', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateProfile():
+    data = request.json
+    cartId = data.get("cartId")
+    if not cartId:
+        return jsonify({"message": "No cartId sent"}), 400
+    valid_fields = ["email", "location", "google_location"]
+    updateItem = {field: value for field,
+                  value in data.items() if field in valid_fields}
+    mongo.db.device_ids.update_one(
+        {
+            "device_id": cartId
+        },
+        {
+            "$set": updateItem
+        }
+    )
+    return jsonify({"message": "Success"})
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 @cross_origin()
 def upload():
@@ -2274,7 +2296,7 @@ def remind_otp():
             }
             # whatsapp message
             requests.post(spring_url +
-                          'api/message/send-registration-otp',
+                          'api/message/send-order-reminder',
                           data=json.dumps(data),
                           headers=headers)
 
@@ -2288,7 +2310,6 @@ def remind_otp():
                 "toAddresses": [otpData["email"]]
             }
             requests.post(mailer_url + 'send-mail', json=payload)
-
 
 
 if __name__ == "__main__":
