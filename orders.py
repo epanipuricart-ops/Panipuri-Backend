@@ -143,14 +143,22 @@ def createMenu(field):
         if not categoryId:
             return jsonify({"message": "No Category ID sent"}), 400
 
+        if not data.get("cartId"):
+            return jsonify({"message": "No Cart ID sent"}), 400
+
         valid_fields = [
-            "name", "img", "desc", "price",
+            "name", "img", "desc", "basePrice",
             "ingredients", "customDiscount", "isOutOfStock"]
         createItem = {field: value for field,
                       value in data.items() if field in valid_fields}
 
         if len(valid_fields) == len(createItem):
             createItem.update({"itemId": generate_custom_id()})
+            gst = mongo.db.menu.find_one({"cartId": data.get("cartId")})
+            if not gst:
+                return jsonify({"message": "Invalid Cart ID sent"}), 400
+            gst = gst["gst"]
+            createItem.update({"price": round(data["basePrice"]*(1+gst), 2)})
             mongo.db.menu.update_one(
                 {
                     "menu.categoryId": categoryId
@@ -491,8 +499,7 @@ def placeOrder():
             "subTotal": extraData["subTotal"],
             "gst": extraData["gst"],
             "manualBilling": False,
-            "total": round(
-                (1+extraData["gst"])*extraData["subTotal"], 2)
+            "total": round(extraData["subTotal"], 2)
         }
         createOrder.update(orderFields)
         createOrder["items"] = items_arr
@@ -544,8 +551,8 @@ def getStatistics():
 @verify_token
 def generateStatistics():
     cartId = request.args.get("cartId")
-    startms = request.args.get("startms")
-    endms = request.args.get("endms")
+    startms = int(request.args.get("startms"))
+    endms = int(request.args.get("endms"))
     items = mongo.db.online_orders.find({
         "cartId": cartId,
         "timestamp": {"$gt":  startms, "$lt": endms}
@@ -559,7 +566,7 @@ def generateStatistics():
     if sales:
         max_sales = max(sales, key=sales.get)
         return jsonify({"sales": sales, "max_sales_item": max_sales})
-    return jsonify({"sales": {}, "max_sales_item": {}})
+    return jsonify({"sales": {}, "max_sales_item": ""})
 
 
 @app.route('/orderOnline/getOrderCartManual', methods=['GET'])
@@ -727,8 +734,7 @@ def placeOrderManual():
             "subTotal": extraData["subTotal"],
             "gst": extraData["gst"],
             "manualBilling": True,
-            "total": round(
-                (1+extraData["gst"])*extraData["subTotal"], 2)
+            "total": round(extraData["subTotal"], 2)
         }
         createOrder.update(orderFields)
         createOrder["items"] = items_arr

@@ -1710,12 +1710,22 @@ def updateMenu(field):
     if field == "item":
         if not data.get("itemId"):
             return jsonify({"message": "No Item ID sent"}), 400
+        if not data.get("cartId"):
+            return jsonify({"message": "No Cart ID sent"}), 400
 
         valid_fields = [
-            "name", "img", "desc", "price",
+            "name", "img", "desc", "basePrice",
             "ingredients", "customDiscount", "isOutOfStock"]
         updateItem = {"menu.$.items.$[t]."+field: value for field,
                       value in data.items() if field in valid_fields}
+        if "basePrice" in data:
+            gst = mongo.db.menu.find_one({"cartId": data.get("cartId")})
+            if not gst:
+                return jsonify({"message": "Invalid Cart ID sent"}), 400
+            gst = gst["gst"]
+            updateItem.update({
+                "menu.$.items.$[t].price": round(data["basePrice"]*(1+gst), 2)
+            })
         mongo.db.menu.update_one(
             {
                 "menu.items.itemId": data.get("itemId")
