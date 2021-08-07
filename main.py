@@ -2102,7 +2102,7 @@ def updateProfile():
 @app.route('/franchisee/getCartProfile', methods=['GET'])
 @cross_origin()
 @verify_token
-def updateProfile():
+def getCartProfile():
     cartId = request.args.get("cartId")
     if not cartId:
         return jsonify({"message": "No cartId sent"}), 400
