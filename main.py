@@ -2078,6 +2078,38 @@ def sendSalesOrder():
     return jsonify({"message": "Success"})
 
 
+@app.route('/franchisee/updateProfile', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateProfile():
+    data = request.json
+    cartId = data.get("cartId")
+    if not cartId:
+        return jsonify({"message": "No cartId sent"}), 400
+    valid_fields = [ "location", "google_location","gstin","fssai"]
+    updateItem = {field: value for field,
+                  value in data.items() if field in valid_fields}
+    mongo.db.device_ids.update_one(
+        {
+            "device_id": cartId
+        },
+        {
+            "$set": updateItem
+        }
+    )
+    return jsonify({"message": "Success"})
+
+@app.route('/franchisee/getCartProfile', methods=['GET'])
+@cross_origin()
+@verify_token
+def updateProfile():
+    cartId = request.args.get("cartId")
+    if not cartId:
+        return jsonify({"message": "No cartId sent"}), 400
+    data =  mongo.db.device_ids.find_one({"device_id": cartId},{"_id": 0})
+    return data
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 @cross_origin()
 def upload():
@@ -2189,6 +2221,21 @@ def getSwitchStatus():
     else:
         return jsonify({"message": "Invalid Device Id"}), 403
 
+@app.route("/postDeviceStatus", methods=['GET', 'POST'])
+@cross_origin()
+def postDeviceStatus():
+    if request.method == "POST":
+        uid = request.json["uid"]
+        deviceStatus = request.json["status"]
+        try:
+            mongo.db.devices.update_one(
+                {"uid": uid}, {'$set': {"deviceState": deviceStatus}})
+        except:
+            print("Error!")
+        return jsonify({"message": "SUCCESS"})
+    else:
+        return jsonify({"message": "Authorization Error"}), 403
+
 
 # @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
 # def zoho_crm_create():
@@ -2224,7 +2271,7 @@ def clear_sid():
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
 
 
-@scheduler.task('cron', id='remind_otp', minute=0)
+#@scheduler.task('cron', id='remind_otp', minute=0)
 def remind_otp():
 
     otpDataList = mongo.db.otpRegistration.find({
@@ -2259,7 +2306,7 @@ def remind_otp():
             }
             # whatsapp message
             requests.post(spring_url +
-                          'api/message/send-registration-otp',
+                          'api/message/send-order-reminder',
                           data=json.dumps(data),
                           headers=headers)
 
