@@ -149,24 +149,20 @@ def create_zoho_book_contact(client):
         print("ZOHO BOOKS:"+str(response))
 
 
-def create_zoho_crm_contact(clients):
-    zoho_records = [{
-        "First_Name": client.get("firstName"),
-        "Last_Name": client.get("lastName"),
-        "Email": client.get("email"),
-        "Phone": client.get("mobile")
-    } for client in clients]
-    contacts = "https://www.zohoapis.in/crm/v2/Contacts"
+def upsert_zoho_crm_contact(client):
+    contacts = "https://www.zohoapis.in/crm/v2/Contacts/upsert"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
     data = {
-        "data": zoho_records,
+        "data": [client],
         "trigger": [
             "approval",
             "workflow",
             "blueprint"
         ]
     }
-    print(requests.post(contacts, headers=header, json=data).json())
+    response = requests.post(contacts, headers=header, json=data).json()
+    print(response)
+    return response
 
 
 def send_estimate_mail(estimate_id, email):
@@ -495,6 +491,18 @@ def getLogo():
     return send_from_directory(".", "logo.png")
 
 
+@app.route('/franchisee/createZohoContact', methods=['POST'])
+@cross_origin()
+def createZohoContact():
+    data = request.json
+    zoho_record = {
+        "First_Name": data.get("firstName"),
+        "Last_Name": data.get("lastName"),
+        "Email": data.get("email")
+    }
+    return jsonify(upsert_zoho_crm_contact(zoho_record))
+
+
 @app.route('/franchisee/sendOTP', methods=['POST'])
 @cross_origin()
 def sendOTP():
@@ -514,13 +522,7 @@ def sendOTP():
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        rec = {
-            'firstName': firstName,
-            'lastName': lastName,
-            'email': email,
-            'mobile': phone
-        }
-        create_zoho_crm_contact([rec])
+
         mongo.db.clients.find_one({"mobile": phone})
         if False:
             return jsonify({"message":
@@ -532,6 +534,15 @@ def sendOTP():
                                          data=json.dumps(data),
                                          headers=headers)
                 json_resp = json.loads(response.text)
+
+                zoho_record = {
+                    "First_Name": firstName,
+                    "Last_Name": lastName,
+                    "Email": email,
+                    "Phone": phone
+                }
+                upsert_zoho_crm_contact(zoho_record)
+
                 return json_resp
             except:
                 return jsonify({"message": "Some Error Occurred"}), 500
@@ -1156,6 +1167,16 @@ def uploadDocuments():
         }
         requests.post(iot_api_url+"/wizard/registerDevice", json=iot_data)
 
+        # zoho sales order
+        zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+        itemId = mongo.db.costing.find_one({"uid": model_uid})
+        if zohoId and itemId:
+            send_sales_mail(
+                create_zoho_sales_order(
+                    zohoId.get("zohoId"),
+                    itemId.get("zoho_itemid")),
+                email)
+
         return jsonify({"message": "Success"})
         # user_data = mongo.db.general_forms.find_one({"email": email})
         # docs_data = mongo.db.docs.find_one({"email": email})
@@ -1402,11 +1423,11 @@ def uploadAgreement():
             aadharLogoPath = os.path.join(app.config['UPLOAD_FOLDER'],
                                           docs_data['aadhar'])
             ap = str(os.path.abspath(aadharLogoPath))
-            #ap = str(aadharLogoPath)
+            # ap = str(aadharLogoPath)
             customerPhotoPath = os.path.join(app.config['UPLOAD_FOLDER'],
                                              docs_data['photo'])
             cp = str(os.path.abspath(customerPhotoPath))
-            #cp = str(customerPhotoPath)
+            # cp = str(customerPhotoPath)
             post = {
                 "name": name,
                 "email": email,
@@ -1995,7 +2016,7 @@ def addToFavourites():
     modelUid = request.json.get("uid")
     mongo.db.shopping_favourites.update_one(
         {"email": email},
-        {"$push": {
+        {"$set": {
             "models": modelUid
         }},
         upsert=True)
@@ -2023,8 +2044,8 @@ def removeFromFavourites():
     modelUid = request.json.get("uid")
     mongo.db.shopping_favourites.update_one(
         {"email": email},
-        {"$pull": {
-            "models": modelUid
+        {"$set": {
+            "models": ""
         }})
     return jsonify({"message": "Success"})
 
