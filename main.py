@@ -24,6 +24,7 @@ import shutil
 import re
 
 UPLOAD_FOLDER = 'public/img'
+PROFILE_FOLDER = 'public/profile'
 AGREEMENT_PDF_FOLDER = r'C:\agreement-pdf'
 BLOG_PHOTO_FOLDER = 'public/blog'
 # INTERMEDIATE_FOLDER = 'intermediate'
@@ -2056,22 +2057,64 @@ def sendSalesOrder():
 @cross_origin()
 @verify_token
 def updateProfile():
-    data = request.json
+    data = request.form
     cartId = data.get("cartId")
     if not cartId:
         return jsonify({"message": "No cartId sent"}), 400
     valid_fields = ["location", "google_location", "gstin", "fssai"]
     updateItem = {field: value for field,
                   value in data.items() if field in valid_fields}
-    mongo.db.device_ids.update_one(
-        {
-            "device_id": cartId
-        },
-        {
-            "$set": updateItem
-        }
-    )
-    return jsonify({"message": "Success"})
+
+    if 'file' in request.files:
+        profile_img = request.files.get('file')
+        first_name = profile_img.filename.split('.')[0]
+        ext = profile_img.filename.split('.')[1]
+        enc_filename = first_name + "_" + str(int(round(time.time() * 1000))) + "." + ext
+        enc_filename = secure_filename(enc_filename)
+        save_path = os.path.abspath(
+        os.path.join(PROFILE_FOLDER, enc_filename))
+            
+        profile_img.save(save_path)
+        updateItem['profile'] = enc_filename
+
+        mongo.db.device_ids.update_one(
+                {
+                    "device_id": cartId
+                },
+                {
+                    "$set": updateItem
+                }
+            )
+        return jsonify({"message": "Successfully updated profile image"})
+        # try:
+        #     save_path = os.path.abspath(
+        #         os.path.join(PROFILE_FOLDER, enc_filename))
+            
+        #     profile_img.save(save_path)
+        #     updateItem['profile'] = enc_filename
+
+        #     mongo.db.device_ids.update_one(
+        #         {
+        #             "device_id": cartId
+        #         },
+        #         {
+        #             "$set": updateItem
+        #         }
+        #     )
+        #     return jsonify({"message": "Successfully updated profile image"})
+        # except:
+        #     return jsonify({"message": "Some error occurred"}), 500
+    else:
+        mongo.db.device_ids.update_one(
+                {
+                    "device_id": cartId
+                },
+                {
+                    "$set": updateItem
+                }
+            )
+        return jsonify({"message": "Success"})
+
 
 
 @app.route('/franchisee/getCartProfile', methods=['GET'])
@@ -2084,6 +2127,10 @@ def getCartProfile():
     data = mongo.db.device_ids.find_one({"device_id": cartId}, {"_id": 0})
     return data
 
+@app.route('/franchisee/getProfileImage/<path:path>', methods=['GET'])
+@cross_origin()
+def getProfilee(path):
+    return send_from_directory('public/profile', path)
 
 @app.route('/upload', methods=['GET', 'POST'])
 @cross_origin()
