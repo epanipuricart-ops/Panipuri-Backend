@@ -1051,7 +1051,7 @@ def registerSidByCustomer(data):
                              })['email']
     if clientEmail:
         mongo.db.customer_sid.update_one({"email": clientEmail}, {
-            "$push": {"sid": request.sid}})
+            "$push": {"sid": request.sid}}, upsert=True)
         emit("customerResponse", {"status": "registered"})
         return {}
     emit("customerResponse", {"status": "failed"})
