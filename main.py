@@ -1152,8 +1152,8 @@ def uploadDocuments():
                                  {"$set": default_menu})
 
         # trigger iot register api
-        model_uid = order_data.get("model_uid", 1)
-        costing_data = mongo.db.costing.find_one({"modelType": model_uid})
+        # modelType is hardcoded to 1
+        costing_data = mongo.db.costing.find_one({"modelType": 1})
         model_type = costing_data.get("extension").strip()[0]
         client = mongo.db.general_forms.find_one({"email": email})
         name = client.get("firstName", "") + " " + client.get("lastName", "")
@@ -1168,6 +1168,7 @@ def uploadDocuments():
         requests.post(iot_api_url+"/wizard/registerDevice", json=iot_data)
 
         # zoho sales order
+        model_uid = order_data.get("model_uid", 1)
         zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
         itemId = mongo.db.costing.find_one({"uid": model_uid})
         if zohoId and itemId:
@@ -1484,6 +1485,52 @@ def uploadAgreement():
         except Exception:
             return jsonify({"message": "Some Error Occurred"}), 500
     return jsonify({"message": "Only PDF files allowed"}), 400
+
+
+@app.route('/franchisee/generateSamplePdf', methods=['GET'])
+@cross_origin()
+@verify_token
+def generateSamplePdf():
+    orderId = request.args.get('orderId')
+    orders_data = mongo.db.orders.find_one({"order_id": orderId})
+    email = orders_data['email']
+    user_data = mongo.db.general_forms.find_one({"email": email})
+    hash_data = mongo.db.hash_map.find_one(
+        {"transaction_id": orders_data['transaction_id']})
+    customer_id = mongo.db.device_ids.find_one(
+        {"order_id": orderId})['device_id']
+    name = user_data['title'] + user_data['firstName'] + " " + user_data[
+        'lastName']
+    SAMPLE_IMAGE = "public/sample-images"
+    aadhar_path = os.path.abspath(
+        os.path.join(SAMPLE_IMAGE, "aadhar_sample.jpg"))
+    customer_path = os.path.abspath(
+        os.path.join(SAMPLE_IMAGE, "person_sample.jpg"))
+    first_page_path = os.path.abspath(
+        os.path.join(SAMPLE_IMAGE, "firstpage_sample.pdf"))
+    pancard_path = os.path.abspath(
+        os.path.join(SAMPLE_IMAGE, "pancard_sample.jpg"))
+    request_data = {
+        "aadhar": user_data['aadhar'],
+        "aadharLogoPath": aadhar_path,
+        "address": user_data['address'],
+        "amount": hash_data['amount'],
+        "brand": "E-Panipurii Kartz",
+        "customerId": customer_id,
+        "customerPhotoPath": customer_path,
+        "email": email,
+        "extension": "3-nozzle system",
+        "firstPagePath": first_page_path,
+        "fname": user_data['fatherName'],
+        "mobile": user_data['mobile'],
+        "model": "Table Top",
+        "name": name,
+        "panLogoPath": pancard_path
+    }
+    response = requests.post(
+        spring_url+'download-sample-pdf/dynamic', json=request_data).json()
+    print(response)
+    return response
 
 
 @app.route('/franchisee/subscribeNewsletter', methods=['POST'])
@@ -2017,7 +2064,7 @@ def addToFavourites():
     mongo.db.shopping_favourites.update_one(
         {"email": email},
         {"$set": {
-            "models": modelUid
+            "models": [modelUid]
         }},
         upsert=True)
     zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
@@ -2044,8 +2091,8 @@ def removeFromFavourites():
     modelUid = request.json.get("uid")
     mongo.db.shopping_favourites.update_one(
         {"email": email},
-        {"$set": {
-            "models": ""
+        {"$pull": {
+            "models": modelUid
         }})
     return jsonify({"message": "Success"})
 
