@@ -1514,7 +1514,7 @@ def generateSamplePdf():
         "aadhar": user_data['aadhar'],
         "aadharLogoPath": aadhar_path,
         "address": user_data['address'],
-        "amount": hash_data['amount'],
+        "amount": str(hash_data['amount']),
         "brand": "E-Panipurii Kartz",
         "customerId": customer_id,
         "customerPhotoPath": customer_path,
