@@ -150,24 +150,20 @@ def create_zoho_book_contact(client):
         print("ZOHO BOOKS:"+str(response))
 
 
-def create_zoho_crm_contact(clients):
-    zoho_records = [{
-        "First_Name": client.get("firstName"),
-        "Last_Name": client.get("lastName"),
-        "Email": client.get("email"),
-        "Phone": client.get("mobile")
-    } for client in clients]
-    contacts = "https://www.zohoapis.in/crm/v2/Contacts"
+def upsert_zoho_crm_contact(client):
+    contacts = "https://www.zohoapis.in/crm/v2/Contacts/upsert"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
     data = {
-        "data": zoho_records,
+        "data": [client],
         "trigger": [
             "approval",
             "workflow",
             "blueprint"
         ]
     }
-    print(requests.post(contacts, headers=header, json=data).json())
+    response = requests.post(contacts, headers=header, json=data).json()
+    print(response)
+    return response
 
 
 def send_estimate_mail(estimate_id, email):
@@ -496,6 +492,18 @@ def getLogo():
     return send_from_directory(".", "logo.png")
 
 
+@app.route('/franchisee/createZohoContact', methods=['POST'])
+@cross_origin()
+def createZohoContact():
+    data = request.json
+    zoho_record = {
+        "First_Name": data.get("firstName"),
+        "Last_Name": data.get("lastName"),
+        "Email": data.get("email")
+    }
+    return jsonify(upsert_zoho_crm_contact(zoho_record))
+
+
 @app.route('/franchisee/sendOTP', methods=['POST'])
 @cross_origin()
 def sendOTP():
@@ -515,13 +523,7 @@ def sendOTP():
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        rec = {
-            'firstName': firstName,
-            'lastName': lastName,
-            'email': email,
-            'mobile': phone
-        }
-        create_zoho_crm_contact([rec])
+
         mongo.db.clients.find_one({"mobile": phone})
         if False:
             return jsonify({"message":
@@ -533,6 +535,15 @@ def sendOTP():
                                          data=json.dumps(data),
                                          headers=headers)
                 json_resp = json.loads(response.text)
+
+                zoho_record = {
+                    "First_Name": firstName,
+                    "Last_Name": lastName,
+                    "Email": email,
+                    "Phone": phone
+                }
+                upsert_zoho_crm_contact(zoho_record)
+
                 return json_resp
             except:
                 return jsonify({"message": "Some Error Occurred"}), 500
@@ -902,7 +913,8 @@ def payuSuccess():
         "status": "pending",
         "model_image": model_image,
         "transaction_id": transaction_id,
-        "deliveryDate": ""
+        "deliveryDate": "",
+        "isAgreement": False
     })
     data = mongo.db.general_forms.find_one({"email": txn_data['email']})
     city = data['town']
@@ -1002,13 +1014,10 @@ def getLatestOrder():
                          })
     email = decoded['email']
     try:
-        data = mongo.db.orders.find({"email": email}).sort("date", -1)
-        d = {}
-        for x in data[0]:
-            if x != "_id":
-                d[x] = data[0][x]
-        return d
-    except:
+        data = mongo.db.orders.find_one(
+            {"email": email, "isAgreement": False}, {"_id": 0})
+        return jsonify(data)
+    except Exception:
         return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -1114,7 +1123,8 @@ def uploadDocuments():
         order_data = mongo.db.orders.find_one_and_update(
             {"order_id": order_id},
             {"$set": {
-                "status": "placed"
+                "status": "placed",
+                "isAgreement": True
             }})
         mongo.db.order_history.insert_one({
             "order_id": order_id,
@@ -1142,8 +1152,8 @@ def uploadDocuments():
                                  {"$set": default_menu})
 
         # trigger iot register api
-        model_uid = order_data.get("model_uid", 1)
-        costing_data = mongo.db.costing.find_one({"modelType": model_uid})
+        # modelType is hardcoded to 1
+        costing_data = mongo.db.costing.find_one({"modelType": 1})
         model_type = costing_data.get("extension").strip()[0]
         client = mongo.db.general_forms.find_one({"email": email})
         name = client.get("firstName", "") + " " + client.get("lastName", "")
@@ -1157,93 +1167,18 @@ def uploadDocuments():
         }
         requests.post(iot_api_url+"/wizard/registerDevice", json=iot_data)
 
+        # zoho sales order
+        model_uid = order_data.get("model_uid", 1)
+        zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+        itemId = mongo.db.costing.find_one({"uid": model_uid})
+        if zohoId and itemId:
+            send_sales_mail(
+                create_zoho_sales_order(
+                    zohoId.get("zohoId"),
+                    itemId.get("zoho_itemid")),
+                email)
+
         return jsonify({"message": "Success"})
-        # user_data = mongo.db.general_forms.find_one({"email": email})
-        # docs_data = mongo.db.docs.find_one({"email": email})
-        # base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
-        # name = user_data['title'] + user_data['firstName'] + " " + user_data[
-        #     'lastName']
-        # aadhar = user_data['aadhar']
-        # brand = "E-Panipurii Kartz"
-        # customer_id = "epanipuricart.dummy.1"
-        # model = "Table Top"
-        # model_extension = "3-nozzle system"
-        # fName = user_data['fatherName']
-        # address = user_data['address'] + ',' + user_data[
-        #     'state'] + ',' + user_data['town'] + ',' + str(
-        #         user_data['pincode'])
-        # mobile = user_data['mobile']
-        # amount = "6000"
-        # aadharLogoPath = os.path.join(app.config['UPLOAD_FOLDER'],
-        #                               docs_data['aadhar'])
-        # ap = str(os.path.abspath(aadharLogoPath))
-        # customerPhotoPath = os.path.join(app.config['UPLOAD_FOLDER'],
-        #                                  docs_data['photo'])
-        # cp = str(os.path.abspath(customerPhotoPath))
-        # customerSignaturePath = os.path.join(app.config['UPLOAD_FOLDER'],
-        #                                      docs_data['sign'])
-        # cs = str(os.path.abspath(customerSignaturePath))
-        # post = {
-        #     "name": name,
-        #     "email": email,
-        #     "aadhar": aadhar,
-        #     "address": address,
-        #     "brand": brand,
-        #     "customerId": customer_id,
-        #     "model": model,
-        #     "extension": model_extension,
-        #     "fname": fName,
-        #     "mobile": mobile,
-        #     "amount": amount,
-        #     "aadharLogoPath": ap,
-        #     "customerPhotoPath": cp,
-        #     "customerSignaturePath": cs
-        # }
-        # headers = {
-        #     "Content-Type": "application/json",
-        #     "Accept": "application/json",
-        # }
-        # try:
-        #     response = requests.post(agreement_url + 'generate-agreement',
-        #                              data=json.dumps(post),
-        #                              headers=headers)
-        #     print(response.text)
-        #     mongo.db.clients.update_one({"email": email},
-        #                                 {"$addToSet": {
-        #                                     "roles": "franchisee"
-        #                                 }})
-        #     mongo.db.orders.update_one({"order_id": order_id},
-        #                                {"$set": {
-        #                                    "status": "placed"
-        #                                }})
-        #     mongo.db.order_history.insert_one({
-        #         "order_id":
-        #         order_id,
-        #         "status":
-        #         "placed",
-        #         "date":
-        #         int(round(time.time() * 1000))
-        #     })
-        #     mongo.db.docs.update_one({"order_id": order_id},
-        #                              {"$set": {
-        #                                  "pdf": str(response.text)
-        #                              }})
-        #     # payload = {
-        #     #             "attachmentPaths": [
-        #     #                 response.text
-        #     #             ],
-        #     #             "bccAddresses": [],
-        #     #             "ccAddresses": [],
-        #     #             "mailBody": "Test Agreement Mail",
-        #     #             "mailSubject": "Agreement Mail",
-        #     #             "toAddresses": [
-        #     #                 email, "ceo@epanipuricart.com", "jyotimay16@gmail.com"
-        #     #             ]
-        #     #         }
-        #     # requests.post(mailer_url+'send-mail',json=payload)
-        #     return jsonify({"output": str(response.text)})
-        # except Exception:
-        #     return jsonify({"message": "Service Error"}), 423
 
 
 @app.route('/franchisee/getMOU', methods=['GET', 'POST'])
@@ -1403,11 +1338,11 @@ def uploadAgreement():
             aadharLogoPath = os.path.join(app.config['UPLOAD_FOLDER'],
                                           docs_data['aadhar'])
             ap = str(os.path.abspath(aadharLogoPath))
-            #ap = str(aadharLogoPath)
+            # ap = str(aadharLogoPath)
             customerPhotoPath = os.path.join(app.config['UPLOAD_FOLDER'],
                                              docs_data['photo'])
             cp = str(os.path.abspath(customerPhotoPath))
-            #cp = str(customerPhotoPath)
+            # cp = str(customerPhotoPath)
             post = {
                 "name": name,
                 "email": email,
@@ -1464,6 +1399,52 @@ def uploadAgreement():
         except Exception:
             return jsonify({"message": "Some Error Occurred"}), 500
     return jsonify({"message": "Only PDF files allowed"}), 400
+
+
+@app.route('/franchisee/generateSamplePdf', methods=['GET'])
+@cross_origin()
+@verify_token
+def generateSamplePdf():
+    orderId = request.args.get('orderId')
+    orders_data = mongo.db.orders.find_one({"order_id": orderId})
+    email = orders_data['email']
+    user_data = mongo.db.general_forms.find_one({"email": email})
+    hash_data = mongo.db.hash_map.find_one(
+        {"transaction_id": orders_data['transaction_id']})
+    customer_id = mongo.db.device_ids.find_one(
+        {"order_id": orderId})['device_id']
+    name = user_data['title'] + user_data['firstName'] + " " + user_data[
+        'lastName']
+    SAMPLE_IMAGE = "public/sample-images"
+    aadhar_path = os.path.abspath(
+        os.path.join(SAMPLE_IMAGE, "aadhar_sample.jpg"))
+    customer_path = os.path.abspath(
+        os.path.join(SAMPLE_IMAGE, "person_sample.jpg"))
+    first_page_path = os.path.abspath(
+        os.path.join(SAMPLE_IMAGE, "firstpage_sample.pdf"))
+    pancard_path = os.path.abspath(
+        os.path.join(SAMPLE_IMAGE, "pancard_sample.jpg"))
+    request_data = {
+        "aadhar": user_data['aadhar'],
+        "aadharLogoPath": aadhar_path,
+        "address": user_data['address'],
+        "amount": str(hash_data['amount']),
+        "brand": "E-Panipurii Kartz",
+        "customerId": customer_id,
+        "customerPhotoPath": customer_path,
+        "email": email,
+        "extension": "3-nozzle system",
+        "firstPagePath": first_page_path,
+        "fname": user_data['fatherName'],
+        "mobile": user_data['mobile'],
+        "model": "Table Top",
+        "name": name,
+        "panLogoPath": pancard_path
+    }
+    response = requests.post(
+        agreement_url+'download-sample-pdf/dynamic', json=request_data).json()
+    print(response)
+    return response
 
 
 @app.route('/franchisee/subscribeNewsletter', methods=['POST'])
@@ -1996,8 +1977,8 @@ def addToFavourites():
     modelUid = request.json.get("uid")
     mongo.db.shopping_favourites.update_one(
         {"email": email},
-        {"$push": {
-            "models": modelUid
+        {"$set": {
+            "models": [modelUid]
         }},
         upsert=True)
     zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})

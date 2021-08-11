@@ -1018,6 +1018,22 @@ def getOrderDetails():
     return jsonify({"message": "No orderId sent"})
 
 
+@app.route('/orderOnline/searchByPhone', methods=['GET'])
+@cross_origin()
+@verify_token
+def searchByPhone():
+    phone = request.args.get("phone")
+    orderData = mongo.db.online_orders.find(
+        {"customerPhone": {'$regex': "^"+phone}}, {"_id": 0})
+    numberList = []
+    resultList = []
+    for order in orderData:
+        if order["customerPhone"] not in numberList:
+            numberList.append(order["customerPhone"])
+            resultList.append(order)
+    return jsonify(resultList)
+
+
 @socketio.on('connect')
 def connected():
     print("SID is", request.sid)
