@@ -912,7 +912,8 @@ def payuSuccess():
         "status": "pending",
         "model_image": model_image,
         "transaction_id": transaction_id,
-        "deliveryDate": ""
+        "deliveryDate": "",
+        "isAgreement": False
     })
     data = mongo.db.general_forms.find_one({"email": txn_data['email']})
     city = data['town']
@@ -1012,13 +1013,10 @@ def getLatestOrder():
                          })
     email = decoded['email']
     try:
-        data = mongo.db.orders.find({"email": email}).sort("date", -1)
-        d = {}
-        for x in data[0]:
-            if x != "_id":
-                d[x] = data[0][x]
-        return d
-    except:
+        data = mongo.db.orders.find_one(
+            {"email": email, "isAgreement": False}, {"_id": 0})
+        return jsonify(data)
+    except Exception:
         return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -1124,7 +1122,8 @@ def uploadDocuments():
         order_data = mongo.db.orders.find_one_and_update(
             {"order_id": order_id},
             {"$set": {
-                "status": "placed"
+                "status": "placed",
+                "isAgreement": True
             }})
         mongo.db.order_history.insert_one({
             "order_id": order_id,
@@ -1179,92 +1178,6 @@ def uploadDocuments():
                 email)
 
         return jsonify({"message": "Success"})
-        # user_data = mongo.db.general_forms.find_one({"email": email})
-        # docs_data = mongo.db.docs.find_one({"email": email})
-        # base_path = r"C:\Users\Administrator\Desktop\EPanipuriKartz\Backend"
-        # name = user_data['title'] + user_data['firstName'] + " " + user_data[
-        #     'lastName']
-        # aadhar = user_data['aadhar']
-        # brand = "E-Panipurii Kartz"
-        # customer_id = "epanipuricart.dummy.1"
-        # model = "Table Top"
-        # model_extension = "3-nozzle system"
-        # fName = user_data['fatherName']
-        # address = user_data['address'] + ',' + user_data[
-        #     'state'] + ',' + user_data['town'] + ',' + str(
-        #         user_data['pincode'])
-        # mobile = user_data['mobile']
-        # amount = "6000"
-        # aadharLogoPath = os.path.join(app.config['UPLOAD_FOLDER'],
-        #                               docs_data['aadhar'])
-        # ap = str(os.path.abspath(aadharLogoPath))
-        # customerPhotoPath = os.path.join(app.config['UPLOAD_FOLDER'],
-        #                                  docs_data['photo'])
-        # cp = str(os.path.abspath(customerPhotoPath))
-        # customerSignaturePath = os.path.join(app.config['UPLOAD_FOLDER'],
-        #                                      docs_data['sign'])
-        # cs = str(os.path.abspath(customerSignaturePath))
-        # post = {
-        #     "name": name,
-        #     "email": email,
-        #     "aadhar": aadhar,
-        #     "address": address,
-        #     "brand": brand,
-        #     "customerId": customer_id,
-        #     "model": model,
-        #     "extension": model_extension,
-        #     "fname": fName,
-        #     "mobile": mobile,
-        #     "amount": amount,
-        #     "aadharLogoPath": ap,
-        #     "customerPhotoPath": cp,
-        #     "customerSignaturePath": cs
-        # }
-        # headers = {
-        #     "Content-Type": "application/json",
-        #     "Accept": "application/json",
-        # }
-        # try:
-        #     response = requests.post(agreement_url + 'generate-agreement',
-        #                              data=json.dumps(post),
-        #                              headers=headers)
-        #     print(response.text)
-        #     mongo.db.clients.update_one({"email": email},
-        #                                 {"$addToSet": {
-        #                                     "roles": "franchisee"
-        #                                 }})
-        #     mongo.db.orders.update_one({"order_id": order_id},
-        #                                {"$set": {
-        #                                    "status": "placed"
-        #                                }})
-        #     mongo.db.order_history.insert_one({
-        #         "order_id":
-        #         order_id,
-        #         "status":
-        #         "placed",
-        #         "date":
-        #         int(round(time.time() * 1000))
-        #     })
-        #     mongo.db.docs.update_one({"order_id": order_id},
-        #                              {"$set": {
-        #                                  "pdf": str(response.text)
-        #                              }})
-        #     # payload = {
-        #     #             "attachmentPaths": [
-        #     #                 response.text
-        #     #             ],
-        #     #             "bccAddresses": [],
-        #     #             "ccAddresses": [],
-        #     #             "mailBody": "Test Agreement Mail",
-        #     #             "mailSubject": "Agreement Mail",
-        #     #             "toAddresses": [
-        #     #                 email, "ceo@epanipuricart.com", "jyotimay16@gmail.com"
-        #     #             ]
-        #     #         }
-        #     # requests.post(mailer_url+'send-mail',json=payload)
-        #     return jsonify({"output": str(response.text)})
-        # except Exception:
-        #     return jsonify({"message": "Service Error"}), 423
 
 
 @app.route('/franchisee/getMOU', methods=['GET', 'POST'])
@@ -1528,7 +1441,7 @@ def generateSamplePdf():
         "panLogoPath": pancard_path
     }
     response = requests.post(
-        spring_url+'download-sample-pdf/dynamic', json=request_data).json()
+        agreement_url+'download-sample-pdf/dynamic', json=request_data).json()
     print(response)
     return response
 
