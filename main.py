@@ -1415,15 +1415,11 @@ def generateSamplePdf():
         {"order_id": orderId})['device_id']
     name = user_data['title'] + user_data['firstName'] + " " + user_data[
         'lastName']
-    SAMPLE_IMAGE = "public/sample-images"
-    aadhar_path = os.path.abspath(
-        os.path.join(SAMPLE_IMAGE, "aadhar_sample.jpg"))
-    customer_path = os.path.abspath(
-        os.path.join(SAMPLE_IMAGE, "person_sample.jpg"))
-    first_page_path = os.path.abspath(
-        os.path.join(SAMPLE_IMAGE, "firstpage_sample.pdf"))
-    pancard_path = os.path.abspath(
-        os.path.join(SAMPLE_IMAGE, "pancard_sample.jpg"))
+    SAMPLE_IMAGE = r"C:\public\img"
+    aadhar_path = os.path.join(SAMPLE_IMAGE, "aadhar_sample.jpg")
+    customer_path = os.path.join(SAMPLE_IMAGE, "person_sample.jpg")
+    first_page_path = os.path.join(SAMPLE_IMAGE, "firstpage_sample.pdf")
+    pancard_path = os.path.join(SAMPLE_IMAGE, "pancard_sample.jpg")
     request_data = {
         "aadhar": user_data['aadhar'],
         "aadharLogoPath": aadhar_path,
@@ -1442,9 +1438,38 @@ def generateSamplePdf():
         "panLogoPath": pancard_path
     }
     response = requests.post(
-        agreement_url+'download-sample-pdf/dynamic', json=request_data).json()
+        agreement_url+'download-sample-pdf/dynamic', json=request_data).text
     print(response)
-    return response
+    response = os.path.split(response)[-1]
+    print(response)
+    return jsonify({"result": response})
+
+
+@app.route('/franchisee/getSamplePdf', methods=['GET'])
+@cross_origin()
+@verify_token
+def getSamplePdf():
+    fileName = request.args.get("file")
+    SAVE_DIR = "C:\\agreement-service\\mou-pdfs"
+    if os.path.isfile(os.path.join(SAVE_DIR, fileName)):
+        return send_from_directory(SAVE_DIR, fileName)
+    return jsonify({"message": "Error file not found"})
+
+
+@app.route('/franchisee/deleteSamplePdf', methods=['GET'])
+@cross_origin()
+@verify_token
+def deleteSamplePdf():
+    fileName = request.args.get("file")
+    headers = {'Content-Type': 'application/json'}
+    SAVE_DIR = "C:\\agreement-service\\mou-pdfs"
+    filePath = os.path.join(SAVE_DIR, fileName)
+    if os.path.isfile(filePath):
+        response = requests.delete(
+            agreement_url+'delete-pdf', headers=headers, data=filePath).text
+        print(response)
+        return jsonify({"message": "Success"})
+    return jsonify({"message": "Error file not found"})
 
 
 @app.route('/franchisee/subscribeNewsletter', methods=['POST'])
@@ -2050,27 +2075,28 @@ def updateProfile():
         profile_img = request.files.get('file')
         first_name = profile_img.filename.split('.')[0]
         ext = profile_img.filename.split('.')[1]
-        enc_filename = first_name + "_" + str(int(round(time.time() * 1000))) + "." + ext
+        enc_filename = first_name + "_" + \
+            str(int(round(time.time() * 1000))) + "." + ext
         enc_filename = secure_filename(enc_filename)
         save_path = os.path.abspath(
-        os.path.join(PROFILE_FOLDER, enc_filename))
-            
+            os.path.join(PROFILE_FOLDER, enc_filename))
+
         profile_img.save(save_path)
         updateItem['profile'] = enc_filename
 
         mongo.db.device_ids.update_one(
-                {
-                    "device_id": cartId
-                },
-                {
-                    "$set": updateItem
-                }
-            )
+            {
+                "device_id": cartId
+            },
+            {
+                "$set": updateItem
+            }
+        )
         return jsonify({"message": "Successfully updated profile image"})
         # try:
         #     save_path = os.path.abspath(
         #         os.path.join(PROFILE_FOLDER, enc_filename))
-            
+
         #     profile_img.save(save_path)
         #     updateItem['profile'] = enc_filename
 
@@ -2087,15 +2113,14 @@ def updateProfile():
         #     return jsonify({"message": "Some error occurred"}), 500
     else:
         mongo.db.device_ids.update_one(
-                {
-                    "device_id": cartId
-                },
-                {
-                    "$set": updateItem
-                }
-            )
+            {
+                "device_id": cartId
+            },
+            {
+                "$set": updateItem
+            }
+        )
         return jsonify({"message": "Success"})
-
 
 
 @app.route('/franchisee/getCartProfile', methods=['GET'])
@@ -2108,10 +2133,12 @@ def getCartProfile():
     data = mongo.db.device_ids.find_one({"device_id": cartId}, {"_id": 0})
     return data
 
+
 @app.route('/franchisee/getProfileImage/<path:path>', methods=['GET'])
 @cross_origin()
 def getProfilee(path):
     return send_from_directory('public/profile', path)
+
 
 @app.route('/upload', methods=['GET', 'POST'])
 @cross_origin()
