@@ -736,17 +736,96 @@ def getGeneralInformation():
                          })
     email = decoded['email']
     try:
-        obj = mongo.db.general_forms.find_one({"email": email})
+        obj = mongo.db.general_forms.find_one({"email": email}, {"_id": 0})
         if obj:
-            data = {}
-            for ele in obj:
-                if ele != "_id":
-                    data[ele] = obj[ele]
-            return data
+            return obj
         else:
             return jsonify({"message", "No saved data"}), 404
     except:
         return jsonify({"message": "Some error occurred"}), 500
+
+
+@app.route('/franchisee/saveMultiUnitForm', methods=['POST'])
+@cross_origin()
+@verify_token
+def saveMultiUnitForm():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+
+    valid_fields = [
+        "title", "firstName", "lastName",
+        "mobile", "aadhar", "fatherName",
+        "address", "pincode",
+        "state", "location", "termsAndConditions"]
+    data = {field: str(request.json.get(field, "")) for field in valid_fields}
+    data["selectedTowns"] = request.json.get("selectedTowns", [])
+    try:
+        mongo.db.multi_general_forms.update_one({"email": email},
+                                                {"$set": data}, upsert=True)
+        mongo.db.clients.update_one(
+            {'email': email},
+            {'$addToSet': {
+                'roles': 'multi_unit_review'
+            }})
+        return jsonify({"message": "Successfully saved"})
+    except Exception:
+        return jsonify({"message": "Some error occurred"}), 500
+
+
+@app.route('/franchisee/getMultiUnitForm', methods=['GET'])
+@cross_origin()
+@verify_token
+def getMultiUnitForm():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    try:
+        obj = mongo.db.multi_general_forms.find_one(
+            {"email": email}, {"_id": 0})
+        if obj:
+            return jsonify(obj)
+        else:
+            return jsonify({"message", "No saved data"}), 404
+    except Exception:
+        return jsonify({"message": "Some error occurred"}), 500
+
+
+@app.route('/franchisee/acceptMultiUnitForm', methods=['GET'])
+@cross_origin()
+@verify_token
+def acceptMultiUnitForm():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    accept = request.args.get("accept")
+    if accept is None:
+        return jsonify({"message": "No accept parameter"}), 400
+    accept = accept.lower() == "true"
+    if accept:
+        mongo.db.clients.update_one(
+            {'email': email},
+            {
+                '$addToSet': {'roles': 'multi_unit_subscriber'}
+            })
+    mongo.db.clients.update_one(
+        {'email': email},
+        {
+            '$pull': {'roles': 'multi_unit_review'}
+        })
+    return jsonify({"message": "Success"})
 
 
 @app.route('/franchisee/getCosting', methods=['GET'])
@@ -893,10 +972,19 @@ def payuSuccess():
             "mihpayid": mihpayid
         }
     })
-    mongo.db.clients.update_one({"email": txn_data['email']},
-                                {"$addToSet": {
-                                    "roles": "paid_subscriber"
-                                }})
+    currentRoles = mongo.db.clients.find_one(
+        {"email": txn_data['email']}, {"roles": 1})
+    currentRoles = currentRoles.get("roles", [])
+    newRole = None
+    if 'multi_unit_subscriber' in currentRoles:
+        newRole = "multi_unit_paid_subscriber"
+    else:
+        newRole = "paid_subscriber"
+    mongo.db.clients.update_one(
+        {"email": txn_data['email']},
+        {"$addToSet": {
+            "roles": newRole
+        }})
     mongo.db.transaction_history.insert_one({
         "transaction_id": transaction_id,
         "completedDate": date
@@ -1116,9 +1204,18 @@ def uploadDocuments():
                         except:
                             return jsonify({"message":
                                             "Some Error Occurred"}), 500
+
+        currentRoles = mongo.db.clients.find_one(
+            {"email": email}, {"roles": 1})
+        currentRoles = currentRoles.get("roles", [])
+        newRole = None
+        if 'multi_unit_paid_subscriber' in currentRoles:
+            newRole = "multi_unit_franchisee"
+        else:
+            newRole = "franchisee"
         mongo.db.clients.update_one({"email": email},
                                     {"$addToSet": {
-                                        "roles": "franchisee"
+                                        "roles": newRole
                                     }})
         order_data = mongo.db.orders.find_one_and_update(
             {"order_id": order_id},
