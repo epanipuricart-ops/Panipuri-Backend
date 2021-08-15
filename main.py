@@ -1498,12 +1498,16 @@ def saveBlog():
         hex_form = generate_custom_id()
         enc_filename = "photo_" + hex_form + "." + ext
         enc_filename = secure_filename(enc_filename)
+        list_of_words = title.split()
+        title_uri = "-".join([ele.lower() for ele in list_of_words])
+        formatted_uri = title_uri + "-" + hex_form
         try:
             save_path = os.path.join(BLOG_PHOTO_FOLDER, enc_filename)
             mongo.db.blogs.insert_one(
                 {
                     "blogId": hex_form,
                     "title": title,
+                    "formatted_uri": formatted_uri,
                     "content": content,
                     "photo": enc_filename,
                     "date": int(round(time.time() * 1000)),
@@ -1518,9 +1522,14 @@ def saveBlog():
 @app.route('/franchisee/getAllBlogs', methods=['GET'])
 @cross_origin()
 def getAllBlogs():
-    blogs_list = mongo.db.blogs.find({}, {"_id": 0})
+    blogs_list = mongo.db.blogs.find({}, {"_id": 0}).sort("date", -1)
     return jsonify({"blogs": list(blogs_list)})
 
+@app.route('/franchisee/ourBlogs/<path:path>', methods=['GET'])
+@cross_origin()
+def getBlogByURI(path):
+    blog = mongo.db.blogs.find_one({"formatted_uri": path}, {"_id": 0})
+    return jsonify({"blog": blog})
 
 @app.route('/franchisee/getBlogImage/<path:path>', methods=['GET'])
 @cross_origin()
