@@ -27,6 +27,7 @@ UPLOAD_FOLDER = 'public/img'
 PROFILE_FOLDER = 'public/profile'
 AGREEMENT_PDF_FOLDER = r'C:\agreement-pdf'
 BLOG_PHOTO_FOLDER = 'public/blog'
+MOU_PDF_PATH = "C:\\agreement-service\\mou-pdfs"
 # INTERMEDIATE_FOLDER = 'intermediate'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
@@ -764,9 +765,11 @@ def saveMultiUnitForm():
         "state", "location", "termsAndConditions"]
     data = {field: str(request.json.get(field, "")) for field in valid_fields}
     data["selectedTowns"] = request.json.get("selectedTowns", [])
+    data["status"] = 0
+    data["formId"] = generate_custom_id()
+    data["email"] = email
     try:
-        mongo.db.multi_general_forms.update_one({"email": email},
-                                                {"$set": data}, upsert=True)
+        mongo.db.multi_general_forms.insert_one(data)
         mongo.db.clients.update_one(
             {'email': email},
             {'$addToSet': {
@@ -789,10 +792,13 @@ def getMultiUnitForm():
                          })
     email = decoded['email']
     try:
-        obj = mongo.db.multi_general_forms.find_one(
-            {"email": email}, {"_id": 0})
+        query = {"email": email}
+        status = request.args.get("status")
+        if status is not None:
+            query["status"] = int(status)
+        obj = mongo.db.multi_general_forms.find(query, {"_id": 0})
         if obj:
-            return jsonify(obj)
+            return jsonify({"forms": list(obj)})
         else:
             return jsonify({"message", "No saved data"}), 404
     except Exception:
@@ -803,29 +809,43 @@ def getMultiUnitForm():
 @cross_origin()
 @verify_token
 def acceptMultiUnitForm():
-    token = request.headers['Authorization']
-    decoded = jwt.decode(token,
-                         options={
-                             "verify_signature": False,
-                             "verify_aud": False
-                         })
-    email = decoded['email']
+    formId = request.args.get("formId")
     accept = request.args.get("accept")
-    if accept is None:
-        return jsonify({"message": "No accept parameter"}), 400
-    accept = accept.lower() == "true"
-    if accept:
+    if accept is None or formId is None:
+        return jsonify({"message": "No formId/accept parameter"}), 400
+    if accept.lower() == "true":
+        formData = mongo.db.multi_general_forms.find_one_and_update(
+            {"formId": formId},
+            {"$set": {"status": 1}})
+        email = formData["email"]
         mongo.db.clients.update_one(
             {'email': email},
             {
                 '$addToSet': {'roles': 'multi_unit_subscriber'}
+            }, {
+                '$pull': {'roles': 'multi_unit_review'}
             })
-    mongo.db.clients.update_one(
-        {'email': email},
-        {
-            '$pull': {'roles': 'multi_unit_review'}
-        })
-    return jsonify({"message": "Success"})
+        return jsonify({"message": "Success"})
+    elif accept.lower() == "false":
+        formData = mongo.db.multi_general_forms.find_one_and_update(
+            {"formId": formId},
+            {"$set": {"status": -1}})
+        email = formData["email"]
+        mongo.db.clients.update_one(
+            {'email': email},
+            {
+                '$pull': {'roles': 'multi_unit_review'}
+            })
+        return jsonify({"message": "Success"})
+    return jsonify({"message": "Invalid string in accept parameter"})
+
+
+@app.route('/franchisee/getPendingForms', methods=['GET'])
+@cross_origin()
+@verify_token
+def getPendingForms():
+    obj = mongo.db.multi_general_forms.find({"status": 0}, {"_id": 0})
+    return jsonify({"forms": list(obj)})
 
 
 @app.route('/franchisee/getCosting', methods=['GET'])
@@ -1547,9 +1567,8 @@ def generateSamplePdf():
 @verify_token
 def getSamplePdf():
     fileName = request.args.get("file")
-    SAVE_DIR = "C:\\agreement-service\\mou-pdfs"
-    if os.path.isfile(os.path.join(SAVE_DIR, fileName)):
-        return send_from_directory(SAVE_DIR, fileName)
+    if os.path.isfile(os.path.join(MOU_PDF_PATH, fileName)):
+        return send_from_directory(MOU_PDF_PATH, fileName)
     return jsonify({"message": "Error file not found"})
 
 
@@ -1559,8 +1578,7 @@ def getSamplePdf():
 def deleteSamplePdf():
     fileName = request.args.get("file")
     headers = {'Content-Type': 'application/json'}
-    SAVE_DIR = "C:\\agreement-service\\mou-pdfs"
-    filePath = os.path.join(SAVE_DIR, fileName)
+    filePath = os.path.join(MOU_PDF_PATH, fileName)
     if os.path.isfile(filePath):
         response = requests.delete(
             agreement_url+'delete-pdf', headers=headers, data=filePath).text
@@ -2397,6 +2415,8 @@ def move_agreement_pdf():
 def clear_sid():
     mongo.db.menu.update_many({}, {"$set": {"sid": []}})
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
+    for f in os.listdir(MOU_PDF_PATH):
+        os.remove(os.path.join(MOU_PDF_PATH, f))
 
 
 # @scheduler.task('cron', id='remind_otp', minute=0)
