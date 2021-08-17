@@ -606,7 +606,7 @@ def reSendOTP():
 @app.route('/franchisee/saveGeneralInformation', methods=['POST'])
 @cross_origin()
 @verify_token
-def saveGeneralForm():
+def saveGeneralInformation():
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
                          options={
@@ -614,114 +614,32 @@ def saveGeneralForm():
                              "verify_aud": False
                          })
     email = decoded['email']
-    obj = mongo.db.general_forms.find_one({'email': email})
-    if 'title' in request.json:
-        title = str(request.json['title'])
-    else:
-        title = ''
-    if 'firstName' in request.json:
-        firstName = str(request.json['firstName'])
-    else:
-        firstName = ''
-    if 'lastName' in request.json:
-        lastName = str(request.json['lastName'])
-    else:
-        lastName = ''
-    if 'mobile' in request.json:
-        mobile = str(request.json['mobile'])
-    else:
-        mobile = ''
-    if 'aadhar' in request.json:
-        aadhar = str(request.json['aadhar'])
-    else:
-        aadhar = ''
+    obj = mongo.db.general_forms.find_one(
+        {'email': email, 'isConverted': False})
 
-    if 'fatherName' in request.json:
-        fatherName = str(request.json['fatherName'])
-    else:
-        fatherName = ''
-
-    if 'address' in request.json:
-        address = str(request.json['address'])
-    else:
-        address = ''
-
-    if 'town' in request.json:
-        town = str(request.json['town'])
-    else:
-        town = ''
-
-    if 'pincode' in request.json:
-        pincode = str(request.json['pincode'])
-    else:
-        pincode = ''
-
-    if 'state' in request.json:
-        state = str(request.json['state'])
-    else:
-        state = ''
-
-    if 'location' in request.json:
-        location = str(request.json['location'])
-    else:
-        location = ''
-
-    if 'termsAndConditions' in request.json:
-        termsAndConditions = str(request.json['termsAndConditions'])
-    else:
-        termsAndConditions = ''
+    valid_fields = [
+        "title", "firstName", "lastName",
+        "mobile", "aadhar", "fatherName",
+        "address", "town", "pincode",
+        "state", "location", "termsAndConditions"
+        "isSubscriber", "isMulti"]
+    data = {field: str(request.json.get(field, "")) for field in valid_fields}
 
     if obj:
         try:
-            mongo.db.general_forms.update_one({"email": email}, {
-                "$set": {
-                    "title": title,
-                    "firstName": firstName,
-                    "lastName": lastName,
-                    "mobile": mobile,
-                    "aadhar": aadhar,
-                    "fatherName": fatherName,
-                    "address": address,
-                    "town": town,
-                    "pincode": pincode,
-                    "state": state,
-                    "location": location,
-                    "termsAndConditions": termsAndConditions
-                }
-            })
+            mongo.db.general_forms.update_one(
+                {"email": email, "isConverted": False}, {
+                    "$set": data
+                })
             return jsonify({"message": "Successfully saved"})
-        except:
+        except Exception:
             return jsonify({"message": "Some error occurred"}), 500
     else:
         try:
-            mongo.db.general_forms.insert_one({
-                "title":
-                title,
-                "firstName":
-                firstName,
-                "lastName":
-                lastName,
-                "mobile":
-                mobile,
-                "aadhar":
-                aadhar,
-                "email":
-                email,
-                "fatherName":
-                fatherName,
-                "address":
-                address,
-                "town":
-                town,
-                "pincode":
-                pincode,
-                "state":
-                state,
-                "termsAndConditions":
-                termsAndConditions
-            })
+            data.update({"isConverted": False, "email": email})
+            mongo.db.general_forms.insert_one(email)
             return jsonify({"message": "Successfully saved"})
-        except:
+        except Exception:
             return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -737,19 +655,20 @@ def getGeneralInformation():
                          })
     email = decoded['email']
     try:
-        obj = mongo.db.general_forms.find_one({"email": email}, {"_id": 0})
+        obj = mongo.db.general_forms.find_one(
+            {"email": email, "isConverted": False}, {"_id": 0})
         if obj:
             return obj
         else:
             return jsonify({"message", "No saved data"}), 404
-    except:
+    except Exception:
         return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/franchisee/saveMultiUnitForm', methods=['POST'])
+@app.route('/franchisee/saveGeneralForm', methods=['POST'])
 @cross_origin()
 @verify_token
-def saveMultiUnitForm():
+def saveGeneralForm():
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
                          options={
@@ -757,33 +676,47 @@ def saveMultiUnitForm():
                              "verify_aud": False
                          })
     email = decoded['email']
-
+    subscription_type = request.args.get("subscription_type")
+    franchisee_type = request.args.get("franchisee_type")
+    if subscription_type is None or franchisee_type is None:
+        return jsonify({"message": "Missing Parameters"}), 400
+    isSubscription = subscription_type.lower() == "subscription"
+    isMulti = franchisee_type.lower() == "multi"
     valid_fields = [
         "title", "firstName", "lastName",
         "mobile", "aadhar", "fatherName",
         "address", "pincode",
         "state", "location", "termsAndConditions"]
     data = {field: str(request.json.get(field, "")) for field in valid_fields}
-    data["selectedTowns"] = request.json.get("selectedTowns", [])
+    if not isSubscription and not isMulti:
+        data["town"] = request.json.get("selectedTowns", "")
+    else:
+        data["selectedTowns"] = request.json.get("selectedTowns", [])
     data["status"] = 0
     data["formId"] = generate_custom_id()
     data["email"] = email
+    data["isSubscription"] = isSubscription
+    data["isMulti"] = isMulti
+
     try:
-        mongo.db.multi_general_forms.insert_one(data)
-        mongo.db.clients.update_one(
-            {'email': email},
-            {'$addToSet': {
-                'roles': 'multi_unit_review'
-            }})
+        if not isSubscription and not isMulti:
+            mongo.db.general_forms.insert_one(data)
+        else:
+            mongo.db.review_general_forms.insert_one(data)
+            mongo.db.clients.update_one(
+                {'email': email},
+                {'$addToSet': {
+                    'roles': "in_review"
+                }})
         return jsonify({"message": "Successfully saved"})
     except Exception:
         return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/franchisee/getMultiUnitForm', methods=['GET'])
+@app.route('/franchisee/getCandidateForms', methods=['GET'])
 @cross_origin()
 @verify_token
-def getMultiUnitForm():
+def getCandidateForms():
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
                          options={
@@ -796,7 +729,7 @@ def getMultiUnitForm():
         status = request.args.get("status")
         if status is not None:
             query["status"] = int(status)
-        obj = mongo.db.multi_general_forms.find(query, {"_id": 0})
+        obj = mongo.db.review_general_forms.find(query, {"_id": 0})
         if obj:
             return jsonify({"forms": list(obj)})
         else:
@@ -814,27 +747,27 @@ def acceptMultiUnitForm():
     if accept is None or formId is None:
         return jsonify({"message": "No formId/accept parameter"}), 400
     if accept.lower() == "true":
-        formData = mongo.db.multi_general_forms.find_one_and_update(
+        formData = mongo.db.review_general_forms.find_one_and_update(
             {"formId": formId},
             {"$set": {"status": 1}})
         email = formData["email"]
         mongo.db.clients.update_one(
             {'email': email},
             {
-                '$addToSet': {'roles': 'multi_unit_subscriber'}
+                '$addToSet': {'roles': 'form_accepted'}
             }, {
-                '$pull': {'roles': 'multi_unit_review'}
+                '$pull': {'roles': 'in_review'}
             })
         return jsonify({"message": "Success"})
     elif accept.lower() == "false":
-        formData = mongo.db.multi_general_forms.find_one_and_update(
+        formData = mongo.db.review_general_forms.find_one_and_update(
             {"formId": formId},
             {"$set": {"status": -1}})
         email = formData["email"]
         mongo.db.clients.update_one(
             {'email': email},
             {
-                '$pull': {'roles': 'multi_unit_review'}
+                '$pull': {'roles': 'in_review'}
             })
         return jsonify({"message": "Success"})
     return jsonify({"message": "Invalid string in accept parameter"})
@@ -844,7 +777,7 @@ def acceptMultiUnitForm():
 @cross_origin()
 @verify_token
 def getPendingForms():
-    obj = mongo.db.multi_general_forms.find({"status": 0}, {"_id": 0})
+    obj = mongo.db.review_general_forms.find({"status": 0}, {"_id": 0})
     return jsonify({"forms": list(obj)})
 
 
@@ -992,18 +925,18 @@ def payuSuccess():
             "mihpayid": mihpayid
         }
     })
-    currentRoles = mongo.db.clients.find_one(
-        {"email": txn_data['email']}, {"roles": 1})
-    currentRoles = currentRoles.get("roles", [])
-    newRole = None
-    if 'multi_unit_subscriber' in currentRoles:
-        newRole = "multi_unit_paid_subscriber"
-    else:
-        newRole = "paid_subscriber"
+    # currentRoles = mongo.db.clients.find_one(
+    #     {"email": txn_data['email']}, {"roles": 1})
+    # currentRoles = currentRoles.get("roles", [])
+    # newRole = None
+    # if 'multi_unit_subscriber' in currentRoles:
+    #     newRole = "multi_unit_paid_subscriber"
+    # else:
+    #     newRole = "paid_subscriber"
     mongo.db.clients.update_one(
         {"email": txn_data['email']},
         {"$addToSet": {
-            "roles": newRole
+            "roles": 'paid_subscriber'
         }})
     mongo.db.transaction_history.insert_one({
         "transaction_id": transaction_id,
@@ -1024,7 +957,8 @@ def payuSuccess():
         "deliveryDate": "",
         "isAgreement": False
     })
-    data = mongo.db.general_forms.find_one({"email": txn_data['email']})
+    data = mongo.db.general_forms.find_one(
+        {"email": txn_data['email'], "isConverted": False})
     city = data['town']
     device_id = get_last_id(city)
     mongo.db.device_ids.insert_one({
@@ -1033,7 +967,8 @@ def payuSuccess():
         "state": data.get("state"),
         "town": city,
         "location": data.get("location"),
-        "order_id": "EK-" + str(order_id)
+        "order_id": "EK-" + str(order_id),
+        "isSubscriber": data["isSubscriber"]
     })
     mongo.db.order_history.insert_one({
         "order_id": order_id,
@@ -1221,22 +1156,27 @@ def uploadDocuments():
                                 os.path.join(app.config['UPLOAD_FOLDER'],
                                              enc_filename))
 
-                        except:
+                        except Exception:
                             return jsonify({"message":
                                             "Some Error Occurred"}), 500
 
-        currentRoles = mongo.db.clients.find_one(
-            {"email": email}, {"roles": 1})
-        currentRoles = currentRoles.get("roles", [])
-        newRole = None
-        if 'multi_unit_paid_subscriber' in currentRoles:
-            newRole = "multi_unit_franchisee"
-        else:
-            newRole = "franchisee"
+        # currentRoles = mongo.db.clients.find_one(
+        #     {"email": email}, {"roles": 1})
+        # currentRoles = currentRoles.get("roles", [])
+        # newRole = None
+        # if 'multi_unit_paid_subscriber' in currentRoles:
+        #     newRole = "multi_unit_franchisee"
+        # else:
+        #     newRole = "franchisee"
         mongo.db.clients.update_one({"email": email},
                                     {"$addToSet": {
-                                        "roles": newRole
+                                        "roles": 'franchisee'
                                     }})
+
+        client = mongo.db.general_forms.find_one_and_update(
+            {"email": email, "isConverted": False},
+            {"$set": {"isConverted": True}}
+        )
         order_data = mongo.db.orders.find_one_and_update(
             {"order_id": order_id},
             {"$set": {
@@ -1272,7 +1212,6 @@ def uploadDocuments():
         # modelType is hardcoded to 1
         costing_data = mongo.db.costing.find_one({"modelType": 1})
         model_type = costing_data.get("extension").strip()[0]
-        client = mongo.db.general_forms.find_one({"email": email})
         name = client.get("firstName", "") + " " + client.get("lastName", "")
         iot_data = {
             "type": model_type,
