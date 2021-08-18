@@ -656,7 +656,7 @@ def getGeneralInformation():
     email = decoded['email']
     try:
         obj = mongo.db.general_forms.find_one(
-            {"email": email, "isConverted": False}, {"_id": 0})
+            {"email": email, "isConverted": {"$ne": True}}, {"_id": 0})
         if obj:
             return obj
         else:
@@ -676,28 +676,30 @@ def saveGeneralForm():
                              "verify_aud": False
                          })
     email = decoded['email']
-    subscription_type = request.args.get("subscription_type")
-    franchisee_type = request.args.get("franchisee_type")
+    subscription_type = request.json.get("subscription_type")
+    franchisee_type = request.json.get("franchisee_type")
     if subscription_type is None or franchisee_type is None:
         return jsonify({"message": "Missing Parameters"}), 400
-    isSubscription = subscription_type.lower() == "subscription"
-    isMulti = franchisee_type.lower() == "multi"
+    isSubscription = subscription_type
+    isMulti = franchisee_type
     valid_fields = [
         "title", "firstName", "lastName",
         "mobile", "aadhar", "fatherName",
         "address", "pincode",
         "state", "location", "termsAndConditions"]
     data = {field: str(request.json.get(field, "")) for field in valid_fields}
-    if not isSubscription and not isMulti:
-        data["town"] = request.json.get("selectedTowns", "")
-    else:
+    if isSubscription and not isMulti:
+        data["selectedTowns"] = [request.json.get("selectedTowns", "")]
+    elif isSubscription or isMulti:
         data["selectedTowns"] = request.json.get("selectedTowns", [])
+    else:
+        data["town"] = request.json.get("selectedTowns", "")
     data["status"] = 0
     data["formId"] = generate_custom_id()
     data["email"] = email
     data["isSubscription"] = isSubscription
     data["isMulti"] = isMulti
-
+    data["createdDate"] = datetime.now()
     try:
         if not isSubscription and not isMulti:
             mongo.db.general_forms.insert_one(data)
@@ -738,15 +740,15 @@ def getCandidateForms():
         return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/franchisee/acceptMultiUnitForm', methods=['GET'])
+@app.route('/franchisee/acceptMultiUnitForm', methods=['POST'])
 @cross_origin()
 @verify_token
 def acceptMultiUnitForm():
-    formId = request.args.get("formId")
-    accept = request.args.get("accept")
+    formId = request.json.get("formId")
+    accept = request.json.get("accept")
     if accept is None or formId is None:
         return jsonify({"message": "No formId/accept parameter"}), 400
-    if accept.lower() == "true":
+    if accept:
         formData = mongo.db.review_general_forms.find_one_and_update(
             {"formId": formId},
             {"$set": {"status": 1}})
@@ -758,8 +760,8 @@ def acceptMultiUnitForm():
             }, {
                 '$pull': {'roles': 'in_review'}
             })
-        return jsonify({"message": "Success"})
-    elif accept.lower() == "false":
+        return jsonify({"message": "Form is accepted"})
+    else:
         formData = mongo.db.review_general_forms.find_one_and_update(
             {"formId": formId},
             {"$set": {"status": -1}})
@@ -769,8 +771,7 @@ def acceptMultiUnitForm():
             {
                 '$pull': {'roles': 'in_review'}
             })
-        return jsonify({"message": "Success"})
-    return jsonify({"message": "Invalid string in accept parameter"})
+        return jsonify({"message": "Form is rejected"})
 
 
 @app.route('/franchisee/getPendingForms', methods=['GET'])
