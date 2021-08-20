@@ -88,3 +88,38 @@ DefaultMenu = {
         }
     ]
 }
+
+
+estimate_mail_body = """
+<div style="background: #fbfbfb;">
+    <div>
+        <div style="padding: 2% 3%;max-width: 150px;max-height:50px;"><img style="max-width: 100%; height: auto; max-height: 50px;" alt="Water" name="Logo" src="https://books.epanipuricart.com/api/v3/settings/templates/invoicelogo/2-148fcfdf6724e4d7879ccf1c8460f5d8448689471b4376428f6afbeeae440c91357e9cc5674702088f7640642e2af0f6"></div>
+    </div>
+    <div style="padding:3%;text-align:center;background: #4190f2;">
+        <div style="color:#fff;font-size:20px;font-weight:500;">Estimate #{est_num}</div>
+    </div>
+    <div style="max-width:560px;margin:auto;padding: 0 3%;">
+        <div style="padding: 30px 0; color: #555;line-height: 1.7;">Dear {name}, <br><br>Thank you for contacting us. Your estimate can be viewed, printed and downloaded as PDF from the link below. <br></div>
+        <div style="padding: 3%; background: #fefff1; border: 1px solid #e8deb5; color: #333;">
+            <div style="padding: 0 3% 3%; border-bottom: 1px solid #e8deb5; text-align: center;">
+                <h4 style="margin-bottom: 0;"> ESTIMATE AMOUNT</h4>
+                <h2 style="color: #D61916; margin-top: 10px;">Rs.{amount}</h2>
+            </div>
+            <div style="margin:auto; max-width:350px; padding: 3%;">
+                <p><span style="width: 35%; padding-left: 10%; float:left;">Estimate No</span><span style="width: 40%; padding-left: 10%;display: inline-block;"><b>{est_num}</b></span></p>
+                <p><span style="width: 35%;padding-left: 10%;float:left;">Estimate Date</span><span style="width: 40%; padding-left: 10%;"><b>{date}</b></span></p>
+            </div>
+            <div style="text-align: center;margin: 25px 0;visibility: hidden;">
+                <a style="text-decoration: none;" href="https://books.epanipuricart.com/portal/wnsfpl/secure?CEstimateID=2-0a8ede9d6a7dbfe7652d2e78aaa73bb0624af194769192a07ddd07a490adccc080f85942f69cb7cdf593e7bb4efd382bd568e698835815da3dee0aeec546433f99935a6181fa8eb0">
+                    <span style="background-color:#4dcf59; border: 1px solid #49bd54; cursor: pointer; text-align: center; min-width: 140px; color: #fff; display: inline-block; text-decoration: none; padding: 10px 20px">VIEW ESTIMATE</span></a>
+            </div>
+        </div><br>
+        <div style="padding: 3% 0;line-height: 1.6;"> Regards,
+            <div style="color: #8c8c8c; font-weight: 400">Harish Neotia </div>
+            <div style="color: #b1b1b1">Water N Spices Foodsz Pvt Ltd</div>
+        </div>
+    </div>
+</div><br><br>
+<div>Harish Neotia </div>Water N Spices Foodsz Pvt Ltd
+<div>www.epanipuricart.com</div>
+"""

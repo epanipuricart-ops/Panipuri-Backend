@@ -151,6 +151,38 @@ def create_zoho_book_contact(client):
         print("ZOHO BOOKS:"+str(response))
 
 
+def update_zoho_book_contact(client):
+    email = client.get("email")
+    attn = client.get("title")+client.get("firstName")
+    address = {
+        "attention": attn,
+        "address": client.get("address"),
+        "state_code": "OD",
+        "city": client.get("town"),
+        "state": "OD",
+        "zip": int(client.get("pincode")),
+        "country": "India",
+        "phone": client.get("mobile")
+    }
+    data = {
+        "billing_address": address,
+        "shipping_address": address,
+        "gst_no": client.get("gst_no"),
+        "gst_treatment": client.get("gst_treatment")
+    }
+    zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+    contacts = "https://books.zoho.in/api/v3/contacts/" + \
+        str(zohoId.get("zohoId"))
+    header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
+    response = requests.post(
+        contacts,
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers=header, json=data).json()
+    print("ZOHO BOOKS UPDATE:"+str(response))
+
+
 def upsert_zoho_crm_contact(client):
     contacts = "https://www.zohoapis.in/crm/v2/Contacts/upsert"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
@@ -167,17 +199,17 @@ def upsert_zoho_crm_contact(client):
     return response
 
 
-def send_estimate_mail(estimate_id, email):
+def send_estimate_mail(estimate, email):
+    estimate_id = estimate.get("estimate_id")
     if not estimate_id:
         return
-    body = """
-    Dear Customer,
-    Thanks for your business enquiry.
-    The estimate is attached with this email.
-    We can get started if you send us your consent.
-    For any assistance you can reach us via email or phone.
-    Looking forward to hearing back from you.
-    """
+    user_data = {
+        "est_num": estimate.get("estimate_number"),
+        "name": estimate.get("customer_name"),
+        "date": estimate.get("date"),
+        "amount": estimate.get("total")
+    }
+    body = cfg.estimate_mail_body
     return requests.post(
         "https://books.zoho.in/api/v3/estimates/"+estimate_id+"/email",
         params={
@@ -194,8 +226,9 @@ def send_estimate_mail(estimate_id, email):
             "cc_mail_ids": [
                 "gyanaranjan7205@gmail.com", "jyotimay16@gmail.com"
             ],
-            "subject": "Estimate Statement",
-            "body": body
+            "subject": ("Estimate - " +
+                        user_data["est_num"]+" is awaiting your approval"),
+            "body": body.format(**user_data)
         }).json()
 
 
@@ -217,7 +250,7 @@ def create_zoho_estimate(customer_id, item_id):
             ]
         }).json()
     if response.get("code") == 0:
-        return response.get("estimate").get("estimate_id")
+        return response.get("estimate")
 
 
 def send_sales_mail(salesorder_id, email):
@@ -622,7 +655,7 @@ def saveGeneralInformation():
         "mobile", "aadhar", "fatherName",
         "address", "town", "pincode",
         "state", "location", "termsAndConditions"
-        "isSubscriber", "isMulti"]
+        "isSubscriber", "isMulti", "gst_no", "gst_treatment"]
     data = {field: str(request.json.get(field, "")) for field in valid_fields}
 
     if obj:
@@ -631,6 +664,8 @@ def saveGeneralInformation():
                 {"email": email, "isConverted": False}, {
                     "$set": data
                 })
+            data.update({"isConverted": False, "email": email})
+            update_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
@@ -638,6 +673,7 @@ def saveGeneralInformation():
         try:
             data.update({"isConverted": False, "email": email})
             mongo.db.general_forms.insert_one(email)
+            update_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
@@ -686,7 +722,8 @@ def saveGeneralForm():
         "title", "firstName", "lastName",
         "mobile", "aadhar", "fatherName",
         "address", "pincode",
-        "state", "location", "termsAndConditions"]
+        "state", "location", "termsAndConditions",
+        "gst_no", "gst_treatment"]
     data = {field: str(request.json.get(field, "")) for field in valid_fields}
     if isSubscription and not isMulti:
         data["selectedTowns"] = [request.json.get("selectedTowns", "")]
@@ -701,6 +738,9 @@ def saveGeneralForm():
     data["isMulti"] = isMulti
     data["createdDate"] = datetime.now()
     try:
+        if data["gst_treatment"] not in [
+                "business_registered_regular", "business_unregistered"]:
+            raise ValueError
         if not isSubscription and not isMulti:
             mongo.db.general_forms.insert_one(data)
         else:
