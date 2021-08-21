@@ -27,6 +27,7 @@ UPLOAD_FOLDER = 'public/img'
 PROFILE_FOLDER = 'public/profile'
 AGREEMENT_PDF_FOLDER = r'C:\agreement-pdf'
 BLOG_PHOTO_FOLDER = 'public/blog'
+MOU_PDF_PATH = "C:\\agreement-service\\mou-pdfs"
 # INTERMEDIATE_FOLDER = 'intermediate'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
@@ -150,6 +151,38 @@ def create_zoho_book_contact(client):
         print("ZOHO BOOKS:"+str(response))
 
 
+def update_zoho_book_contact(client):
+    email = client.get("email")
+    attn = client.get("title")+client.get("firstName")
+    address = {
+        "attention": attn,
+        "address": client.get("address"),
+        "state_code": "OD",
+        "city": client.get("town"),
+        "state": "OD",
+        "zip": int(client.get("pincode")),
+        "country": "India",
+        "phone": client.get("mobile")
+    }
+    data = {
+        "billing_address": address,
+        "shipping_address": address,
+        "gst_no": client.get("gst_no"),
+        "gst_treatment": client.get("gst_treatment")
+    }
+    zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+    contacts = "https://books.zoho.in/api/v3/contacts/" + \
+        str(zohoId.get("zohoId"))
+    header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
+    response = requests.post(
+        contacts,
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers=header, json=data).json()
+    print("ZOHO BOOKS UPDATE:"+str(response))
+
+
 def upsert_zoho_crm_contact(client):
     contacts = "https://www.zohoapis.in/crm/v2/Contacts/upsert"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
@@ -166,17 +199,17 @@ def upsert_zoho_crm_contact(client):
     return response
 
 
-def send_estimate_mail(estimate_id, email):
+def send_estimate_mail(estimate, email):
+    estimate_id = estimate.get("estimate_id")
     if not estimate_id:
         return
-    body = """
-    Dear Customer,
-    Thanks for your business enquiry.
-    The estimate is attached with this email.
-    We can get started if you send us your consent.
-    For any assistance you can reach us via email or phone.
-    Looking forward to hearing back from you.
-    """
+    user_data = {
+        "est_num": estimate.get("estimate_number"),
+        "name": estimate.get("customer_name"),
+        "date": estimate.get("date"),
+        "amount": estimate.get("total")
+    }
+    body = cfg.estimate_mail_body
     return requests.post(
         "https://books.zoho.in/api/v3/estimates/"+estimate_id+"/email",
         params={
@@ -193,8 +226,9 @@ def send_estimate_mail(estimate_id, email):
             "cc_mail_ids": [
                 "gyanaranjan7205@gmail.com", "jyotimay16@gmail.com"
             ],
-            "subject": "Estimate Statement",
-            "body": body
+            "subject": ("Estimate - " +
+                        user_data["est_num"]+" is awaiting your approval"),
+            "body": body.format(**user_data)
         }).json()
 
 
@@ -216,7 +250,7 @@ def create_zoho_estimate(customer_id, item_id):
             ]
         }).json()
     if response.get("code") == 0:
-        return response.get("estimate").get("estimate_id")
+        return response.get("estimate")
 
 
 def send_sales_mail(salesorder_id, email):
@@ -605,7 +639,7 @@ def reSendOTP():
 @app.route('/franchisee/saveGeneralInformation', methods=['POST'])
 @cross_origin()
 @verify_token
-def saveGeneralForm():
+def saveGeneralInformation():
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
                          options={
@@ -613,114 +647,35 @@ def saveGeneralForm():
                              "verify_aud": False
                          })
     email = decoded['email']
-    obj = mongo.db.general_forms.find_one({'email': email})
-    if 'title' in request.json:
-        title = str(request.json['title'])
-    else:
-        title = ''
-    if 'firstName' in request.json:
-        firstName = str(request.json['firstName'])
-    else:
-        firstName = ''
-    if 'lastName' in request.json:
-        lastName = str(request.json['lastName'])
-    else:
-        lastName = ''
-    if 'mobile' in request.json:
-        mobile = str(request.json['mobile'])
-    else:
-        mobile = ''
-    if 'aadhar' in request.json:
-        aadhar = str(request.json['aadhar'])
-    else:
-        aadhar = ''
+    obj = mongo.db.general_forms.find_one(
+        {'email': email, 'isConverted': False})
 
-    if 'fatherName' in request.json:
-        fatherName = str(request.json['fatherName'])
-    else:
-        fatherName = ''
-
-    if 'address' in request.json:
-        address = str(request.json['address'])
-    else:
-        address = ''
-
-    if 'town' in request.json:
-        town = str(request.json['town'])
-    else:
-        town = ''
-
-    if 'pincode' in request.json:
-        pincode = str(request.json['pincode'])
-    else:
-        pincode = ''
-
-    if 'state' in request.json:
-        state = str(request.json['state'])
-    else:
-        state = ''
-
-    if 'location' in request.json:
-        location = str(request.json['location'])
-    else:
-        location = ''
-
-    if 'termsAndConditions' in request.json:
-        termsAndConditions = str(request.json['termsAndConditions'])
-    else:
-        termsAndConditions = ''
+    valid_fields = [
+        "title", "firstName", "lastName",
+        "mobile", "aadhar", "fatherName",
+        "address", "town", "pincode",
+        "state", "location", "termsAndConditions"
+        "isSubscriber", "isMulti", "gst_no", "gst_treatment"]
+    data = {field: str(request.json.get(field, "")) for field in valid_fields}
 
     if obj:
         try:
-            mongo.db.general_forms.update_one({"email": email}, {
-                "$set": {
-                    "title": title,
-                    "firstName": firstName,
-                    "lastName": lastName,
-                    "mobile": mobile,
-                    "aadhar": aadhar,
-                    "fatherName": fatherName,
-                    "address": address,
-                    "town": town,
-                    "pincode": pincode,
-                    "state": state,
-                    "location": location,
-                    "termsAndConditions": termsAndConditions
-                }
-            })
+            mongo.db.general_forms.update_one(
+                {"email": email, "isConverted": False}, {
+                    "$set": data
+                })
+            data.update({"isConverted": False, "email": email})
+            update_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
-        except:
+        except Exception:
             return jsonify({"message": "Some error occurred"}), 500
     else:
         try:
-            mongo.db.general_forms.insert_one({
-                "title":
-                title,
-                "firstName":
-                firstName,
-                "lastName":
-                lastName,
-                "mobile":
-                mobile,
-                "aadhar":
-                aadhar,
-                "email":
-                email,
-                "fatherName":
-                fatherName,
-                "address":
-                address,
-                "town":
-                town,
-                "pincode":
-                pincode,
-                "state":
-                state,
-                "termsAndConditions":
-                termsAndConditions
-            })
+            data.update({"isConverted": False, "email": email})
+            mongo.db.general_forms.insert_one(email)
+            update_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
-        except:
+        except Exception:
             return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -736,19 +691,20 @@ def getGeneralInformation():
                          })
     email = decoded['email']
     try:
-        obj = mongo.db.general_forms.find_one({"email": email}, {"_id": 0})
+        obj = mongo.db.general_forms.find_one(
+            {"email": email, "isConverted": {"$ne": True}}, {"_id": 0})
         if obj:
             return obj
         else:
             return jsonify({"message", "No saved data"}), 404
-    except:
+    except Exception:
         return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/franchisee/saveMultiUnitForm', methods=['POST'])
+@app.route('/franchisee/saveGeneralForm', methods=['POST'])
 @cross_origin()
 @verify_token
-def saveMultiUnitForm():
+def saveGeneralForm():
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
                          options={
@@ -756,31 +712,53 @@ def saveMultiUnitForm():
                              "verify_aud": False
                          })
     email = decoded['email']
-
+    subscription_type = request.json.get("subscription_type")
+    franchisee_type = request.json.get("franchisee_type")
+    if subscription_type is None or franchisee_type is None:
+        return jsonify({"message": "Missing Parameters"}), 400
+    isSubscription = subscription_type
+    isMulti = franchisee_type
     valid_fields = [
         "title", "firstName", "lastName",
         "mobile", "aadhar", "fatherName",
         "address", "pincode",
-        "state", "location", "termsAndConditions"]
+        "state", "location", "termsAndConditions",
+        "gst_no", "gst_treatment"]
     data = {field: str(request.json.get(field, "")) for field in valid_fields}
-    data["selectedTowns"] = request.json.get("selectedTowns", [])
+    if isSubscription and not isMulti:
+        data["selectedTowns"] = [request.json.get("selectedTowns", "")]
+    elif isSubscription or isMulti:
+        data["selectedTowns"] = request.json.get("selectedTowns", [])
+    else:
+        data["town"] = request.json.get("selectedTowns", "")
+    data["status"] = 0
+    data["formId"] = generate_custom_id()
+    data["email"] = email
+    data["isSubscription"] = isSubscription
+    data["isMulti"] = isMulti
+    data["createdDate"] = datetime.now()
     try:
-        mongo.db.multi_general_forms.update_one({"email": email},
-                                                {"$set": data}, upsert=True)
-        mongo.db.clients.update_one(
-            {'email': email},
-            {'$addToSet': {
-                'roles': 'multi_unit_review'
-            }})
+        if data["gst_treatment"] not in [
+                "business_registered_regular", "business_unregistered"]:
+            raise ValueError
+        if not isSubscription and not isMulti:
+            mongo.db.general_forms.insert_one(data)
+        else:
+            mongo.db.review_general_forms.insert_one(data)
+            mongo.db.clients.update_one(
+                {'email': email},
+                {'$addToSet': {
+                    'roles': "in_review"
+                }})
         return jsonify({"message": "Successfully saved"})
     except Exception:
         return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/franchisee/getMultiUnitForm', methods=['GET'])
+@app.route('/franchisee/getCandidateForms', methods=['GET'])
 @cross_origin()
 @verify_token
-def getMultiUnitForm():
+def getCandidateForms():
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
                          options={
@@ -789,43 +767,59 @@ def getMultiUnitForm():
                          })
     email = decoded['email']
     try:
-        obj = mongo.db.multi_general_forms.find_one(
-            {"email": email}, {"_id": 0})
+        query = {"email": email}
+        status = request.args.get("status")
+        if status is not None:
+            query["status"] = int(status)
+        obj = mongo.db.review_general_forms.find(query, {"_id": 0})
         if obj:
-            return jsonify(obj)
+            return jsonify({"forms": list(obj)})
         else:
             return jsonify({"message", "No saved data"}), 404
     except Exception:
         return jsonify({"message": "Some error occurred"}), 500
 
 
-@app.route('/franchisee/acceptMultiUnitForm', methods=['GET'])
+@app.route('/franchisee/acceptMultiUnitForm', methods=['POST'])
 @cross_origin()
 @verify_token
 def acceptMultiUnitForm():
-    token = request.headers['Authorization']
-    decoded = jwt.decode(token,
-                         options={
-                             "verify_signature": False,
-                             "verify_aud": False
-                         })
-    email = decoded['email']
-    accept = request.args.get("accept")
-    if accept is None:
-        return jsonify({"message": "No accept parameter"}), 400
-    accept = accept.lower() == "true"
+    formId = request.json.get("formId")
+    accept = request.json.get("accept")
+    if accept is None or formId is None:
+        return jsonify({"message": "No formId/accept parameter"}), 400
     if accept:
+        formData = mongo.db.review_general_forms.find_one_and_update(
+            {"formId": formId},
+            {"$set": {"status": 1}})
+        email = formData["email"]
         mongo.db.clients.update_one(
             {'email': email},
             {
-                '$addToSet': {'roles': 'multi_unit_subscriber'}
+                '$addToSet': {'roles': 'form_accepted'}
+            }, {
+                '$pull': {'roles': 'in_review'}
             })
-    mongo.db.clients.update_one(
-        {'email': email},
-        {
-            '$pull': {'roles': 'multi_unit_review'}
-        })
-    return jsonify({"message": "Success"})
+        return jsonify({"message": "Form is accepted"})
+    else:
+        formData = mongo.db.review_general_forms.find_one_and_update(
+            {"formId": formId},
+            {"$set": {"status": -1}})
+        email = formData["email"]
+        mongo.db.clients.update_one(
+            {'email': email},
+            {
+                '$pull': {'roles': 'in_review'}
+            })
+        return jsonify({"message": "Form is rejected"})
+
+
+@app.route('/franchisee/getPendingForms', methods=['GET'])
+@cross_origin()
+@verify_token
+def getPendingForms():
+    obj = mongo.db.review_general_forms.find({"status": 0}, {"_id": 0})
+    return jsonify({"forms": list(obj)})
 
 
 @app.route('/franchisee/getCosting', methods=['GET'])
@@ -974,18 +968,18 @@ def payuSuccess():
             "mihpayid": mihpayid
         }
     })
-    currentRoles = mongo.db.clients.find_one(
-        {"email": txn_data['email']}, {"roles": 1})
-    currentRoles = currentRoles.get("roles", [])
-    newRole = None
-    if 'multi_unit_subscriber' in currentRoles:
-        newRole = "multi_unit_paid_subscriber"
-    else:
-        newRole = "paid_subscriber"
+    # currentRoles = mongo.db.clients.find_one(
+    #     {"email": txn_data['email']}, {"roles": 1})
+    # currentRoles = currentRoles.get("roles", [])
+    # newRole = None
+    # if 'multi_unit_subscriber' in currentRoles:
+    #     newRole = "multi_unit_paid_subscriber"
+    # else:
+    #     newRole = "paid_subscriber"
     mongo.db.clients.update_one(
         {"email": txn_data['email']},
         {"$addToSet": {
-            "roles": newRole
+            "roles": 'paid_subscriber'
         }})
     mongo.db.transaction_history.insert_one({
         "transaction_id": transaction_id,
@@ -1006,7 +1000,8 @@ def payuSuccess():
         "deliveryDate": "",
         "isAgreement": False
     })
-    data = mongo.db.general_forms.find_one({"email": txn_data['email']})
+    data = mongo.db.general_forms.find_one(
+        {"email": txn_data['email'], "isConverted": False})
     city = data['town']
     device_id = get_last_id(city)
     mongo.db.device_ids.insert_one({
@@ -1015,7 +1010,8 @@ def payuSuccess():
         "state": data.get("state"),
         "town": city,
         "location": data.get("location"),
-        "order_id": "EK-" + str(order_id)
+        "order_id": "EK-" + str(order_id),
+        "isSubscriber": data["isSubscriber"]
     })
     mongo.db.order_history.insert_one({
         "order_id": order_id,
@@ -1203,22 +1199,27 @@ def uploadDocuments():
                                 os.path.join(app.config['UPLOAD_FOLDER'],
                                              enc_filename))
 
-                        except:
+                        except Exception:
                             return jsonify({"message":
                                             "Some Error Occurred"}), 500
 
-        currentRoles = mongo.db.clients.find_one(
-            {"email": email}, {"roles": 1})
-        currentRoles = currentRoles.get("roles", [])
-        newRole = None
-        if 'multi_unit_paid_subscriber' in currentRoles:
-            newRole = "multi_unit_franchisee"
-        else:
-            newRole = "franchisee"
+        # currentRoles = mongo.db.clients.find_one(
+        #     {"email": email}, {"roles": 1})
+        # currentRoles = currentRoles.get("roles", [])
+        # newRole = None
+        # if 'multi_unit_paid_subscriber' in currentRoles:
+        #     newRole = "multi_unit_franchisee"
+        # else:
+        #     newRole = "franchisee"
         mongo.db.clients.update_one({"email": email},
                                     {"$addToSet": {
-                                        "roles": newRole
+                                        "roles": 'franchisee'
                                     }})
+
+        client = mongo.db.general_forms.find_one_and_update(
+            {"email": email, "isConverted": False},
+            {"$set": {"isConverted": True}}
+        )
         order_data = mongo.db.orders.find_one_and_update(
             {"order_id": order_id},
             {"$set": {
@@ -1254,7 +1255,6 @@ def uploadDocuments():
         # modelType is hardcoded to 1
         costing_data = mongo.db.costing.find_one({"modelType": 1})
         model_type = costing_data.get("extension").strip()[0]
-        client = mongo.db.general_forms.find_one({"email": email})
         name = client.get("firstName", "") + " " + client.get("lastName", "")
         iot_data = {
             "type": model_type,
@@ -1549,9 +1549,8 @@ def generateSamplePdf():
 @verify_token
 def getSamplePdf():
     fileName = request.args.get("file")
-    SAVE_DIR = "C:\\agreement-service\\mou-pdfs"
-    if os.path.isfile(os.path.join(SAVE_DIR, fileName)):
-        return send_from_directory(SAVE_DIR, fileName)
+    if os.path.isfile(os.path.join(MOU_PDF_PATH, fileName)):
+        return send_from_directory(MOU_PDF_PATH, fileName)
     return jsonify({"message": "Error file not found"})
 
 
@@ -1561,8 +1560,7 @@ def getSamplePdf():
 def deleteSamplePdf():
     fileName = request.args.get("file")
     headers = {'Content-Type': 'application/json'}
-    SAVE_DIR = "C:\\agreement-service\\mou-pdfs"
-    filePath = os.path.join(SAVE_DIR, fileName)
+    filePath = os.path.join(MOU_PDF_PATH, fileName)
     if os.path.isfile(filePath):
         response = requests.delete(
             agreement_url+'delete-pdf', headers=headers, data=filePath).text
@@ -2399,6 +2397,8 @@ def move_agreement_pdf():
 def clear_sid():
     mongo.db.menu.update_many({}, {"$set": {"sid": []}})
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
+    for f in os.listdir(MOU_PDF_PATH):
+        os.remove(os.path.join(MOU_PDF_PATH, f))
 
 
 # @scheduler.task('cron', id='remind_otp', minute=0)
