@@ -844,6 +844,8 @@ def getCosting():
             d['modelType'] = ele['modelType']
             d['extension'] = ele['extension']
             d['model_image'] = ele['model_image']
+            if 'subscriptionPrice' in ele:
+                d['subscriptionPrice'] = ele['subscriptionPrice']
             arr.append(d)
         return jsonify({"items": arr})
 
