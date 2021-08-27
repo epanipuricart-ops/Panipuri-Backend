@@ -6,57 +6,48 @@
 \usepackage{tabularx}
 \usepackage{amsmath}
 \usepackage[table,xcdraw]{xcolor}
+\usepackage{tfrupee}
 
 
 \begin{document}
-\definecolor{Gray}{gray}{0.9}
+\definecolor{Aqua}{HTML}{B8DAFF}
 \thispagestyle{empty}
-
-\begin{center}
-  \includegraphics[height=1.98cm]{logo.png}
-\end{center}
-\begin{center}
-\text{|location|}
-\end{center}
-\vspace{0.2 cm}
-\hrule
 
 \vspace{0.5 cm}
 
 
 \begin{tabularx}{\linewidth}{l X l}
-  \textbf{INVOICE FOR}        &   & \textbf{Order ID}: \text{|orderId|} \\
-  \text{|customerName|}          &   & \textbf{Time}: |timestamp|                        \\
-  \text{|customerPhone|}           &   &                           \\
-  \text{|customerEmail|} &   &                     \\
-  \text{|deliveryAddress|} & & \\
-  
+  \includegraphics[height=1.98cm]{circle_logo.png}   &   & \text{ORDER ID} \\
+  \textbf{E-panipuricart}     &   &  \textbf{|orderId|}      \\
+  \text{|customerName|}       &   &  \text{DATE}             \\
+  \text{|customerPhone|}      &   &  \textbf{|timestamp|}    \\
+  \text{|customerEmail|}      &   &                          \\
+  \\
+  \text{PAYMENT MODE}         &   &                          \\
+  \textbf{|modeOfPayment|}    &   &                          \\
 \end{tabularx}
 
 \vspace{0.5 cm}
 
 % Table of fees
-\begin{tabularx}{\linewidth}{l X X X l}
+\begin{tabularx}{\linewidth}{X l l l l}
   %   \hline
-  \rowcolor{Gray}
+  \rowcolor{Aqua}
   & & & \\
-  \rowcolor{Gray}
-  \centering{\bf{Item}}   & \centering{\bf{Quantity}} & \centering{\bf{Unit Price}} & \multicolumn{1}{r}{\bf{Total Price}} \\
-  \rowcolor{Gray}
+  \rowcolor{Aqua}
+  \bf{Item}   & \centering{\bf{Quantity}} & \centering{\bf{Unit Price}} & \multicolumn{1}{r}{\bf{Total Price}} \\
+  \rowcolor{Aqua}
   & & & \\
   \hline
   \\
   |items|
-  \hline
+
   \hline
   \\
-\end{tabularx}
-\begin{tabularx}{\linewidth}{l X r}
-  \textbf{Sub Total}:        & & RS.  |subTotal| \\
-  \textbf{GST}:        & & RS.  |gst|  \\
-  \textbf{Packing Charges}:  & & RS.  |packingCharge|  \\
-  \textbf{Delivery Charge}:  & & RS.  |deliveryCharge|  \\
-  \textbf{Total}:            & & RS.  |total| \\
+  & & \textbf{Sub Total}       & \multicolumn{1}{r}{\rupee~|subTotal|} \\
+  & & \textbf{Packing Charges} & \multicolumn{1}{r}{\rupee~|packingCharge|}  \\
+  & & \textbf{Delivery Charge} & \multicolumn{1}{r}{\rupee~|deliveryCharge|}  \\
+  & & \textbf{Total}           & \multicolumn{1}{r}{\rupee~|total|} \\
   \\
   \hline
   \hline
