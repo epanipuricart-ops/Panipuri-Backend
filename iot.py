@@ -661,7 +661,7 @@ def updatePayment(action):
     if data is None:
         return jsonify({"message": "No JSON data sent"}), 400
 
-    device_id = request.args.get("deviceId")
+    device_id = request.json.get("deviceId")
     if device_id is None:
         return jsonify({"message": "No deviceId sent"}), 400
     if action == "add":
@@ -677,7 +677,7 @@ def updatePayment(action):
             },
             {
                 "$push": {"paymentMethods": updatePay}
-            })
+            },upsert=True)
     elif action == "remove":
         methodId = data.get("methodId")
         if not methodId:

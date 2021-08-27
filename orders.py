@@ -825,6 +825,22 @@ def getOrderByTypeAndStatus():
         query, {"_id": 0}).sort("timestamp", -1)
     return jsonify({"orders": list(orders)})
 
+@app.route('/orderOnline/pendingOrders', methods=['GET'])
+@cross_origin()
+@verify_token
+def pendingOrders():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    pending_data = mongo.db.online_orders.find({"customerEmail": email, "orderStatus": "pending"},{"_id": 0}).sort("timestamp", -1)
+    if pending_data:
+        return jsonify({"orders": list(pending_data) })
+    else:
+        return jsonify({"orders": [] })
 
 @app.route('/orderOnline/ongoingOrders', methods=['GET'])
 @cross_origin()
