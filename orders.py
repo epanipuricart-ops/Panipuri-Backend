@@ -897,7 +897,7 @@ def generateInvoice():
     if order_data:
         device_id = mongo.db.device_ids.find_one(
             {"device_id": order_data.get("cartId")})
-        items_format = r"|itemName| & \centering |qty| & \centering RS. |price| & \multicolumn{1}{r}{ RS. |totalPrice| }\\"
+        items_format = r"|itemName| & \centering |qty| & \centering INR |price| & \multicolumn{1}{r}{ INR |totalPrice| }\\"
         items_list = []
         for item in order_data["items"]:
             item_str = items_format
