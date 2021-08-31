@@ -1658,11 +1658,13 @@ def getAllBlogs():
     blogs_list = mongo.db.blogs.find({}, {"_id": 0}).sort("date", -1)
     return jsonify({"blogs": list(blogs_list)})
 
+
 @app.route('/franchisee/ourBlogs/<path:path>', methods=['GET'])
 @cross_origin()
 def getBlogByURI(path):
     blog = mongo.db.blogs.find_one({"formatted_uri": path}, {"_id": 0})
     return jsonify({"blog": blog})
+
 
 @app.route('/franchisee/getBlogImage/<path:path>', methods=['GET'])
 @cross_origin()
@@ -2446,6 +2448,8 @@ def move_agreement_pdf():
 @scheduler.task('cron', id='clear_sid', minute=0, hour=2)
 def clear_sid():
     mongo.db.menu.update_many({}, {"$set": {"sid": []}})
+    mongo.db.devices.update_many({}, {"$set":
+                                      {"activeState": 0, "deviceState": 0}})
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
     for f in os.listdir(MOU_PDF_PATH):
         os.remove(os.path.join(MOU_PDF_PATH, f))

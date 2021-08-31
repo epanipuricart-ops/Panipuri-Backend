@@ -897,7 +897,7 @@ def generateInvoice():
     if order_data:
         device_id = mongo.db.device_ids.find_one(
             {"device_id": order_data.get("cartId")})
-        items_format = r"|itemName| & \centering |qty| & \centering RS. |price| & \multicolumn{1}{r}{ RS. |totalPrice| }\\"
+        items_format = r"|itemName| & \centering |qty| & \centering INR |price| & \multicolumn{1}{r}{ INR |totalPrice| }\\"
         items_list = []
         for item in order_data["items"]:
             item_str = items_format
@@ -924,7 +924,7 @@ def generateInvoice():
         for k, v in order_data.items():
             latex_data = latex_data.replace("|"+k+"|", str(v))
         tmp_file = os.path.join(
-            INVOICE_PDF_FOLDER, generate_custom_id()+".tex")
+            INVOICE_PDF_FOLDER, orderId+".tex")
         with open(tmp_file, "w") as lfile:
             lfile.write(latex_data)
         process = subprocess.Popen([
