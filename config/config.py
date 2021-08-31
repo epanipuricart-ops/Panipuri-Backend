@@ -19,6 +19,9 @@ IOTFlask = {
     'PORT': 5002,
     'THREADED': True
 }
+WherebyConfig = {
+    "API_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmFwcGVhci5pbiIsImF1ZCI6Imh0dHBzOi8vYXBpLmFwcGVhci5pbi92MSIsImV4cCI6OTAwNzE5OTI1NDc0MDk5MSwiaWF0IjoxNjMwMTMwNzE0LCJvcmdhbml6YXRpb25JZCI6MTI2MjkyLCJqdGkiOiI3NWJmODYyMS1iZThmLTQwZWUtYjk1NS02NmM5M2Q2MjY4OWUifQ.fpDBFa8l-BfKrOUQ56L65KPoWrKT2V9So-vs9uJCLB4"
+}
 
 ZohoConfig = {
     "refresh_token": "1000.510cb546d2f8355230a541d619043fbe.bfa28cbbfce2dff97ccffcfd686a7594",

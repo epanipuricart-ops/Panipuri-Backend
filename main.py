@@ -396,6 +396,36 @@ def register(path):
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
 
+@app.route('/franchisee/startMeeting', methods=['POST'])
+@cross_origin()
+def startMeeting():
+    API_KEY = cfg.WherebyConfig["API_KEY"]
+
+    data = {
+        "startDate": "2021-08-28T07:21:00.000Z",
+        "endDate": "2021-08-31T07:20:00.000Z",
+        "fields": ["hostRoomUrl"],
+    }
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    response = requests.post(
+        "https://api.whereby.dev/v1/meetings",
+        headers=headers,
+        json=data
+    )
+
+    print("Status code:", response.status_code)
+    data = json.loads(response.text)
+    print(data)
+    print("Room URL:", data["roomUrl"])
+    print("Host room URL:", data["hostRoomUrl"])
+    return jsonify({"room_url": data["roomUrl"]})
+
+
 
 @app.route('/franchisee/convertToSubscriber', methods=['GET'])
 @cross_origin()
@@ -736,6 +766,12 @@ def saveGeneralForm():
     data["email"] = email
     data["isSubscription"] = isSubscription
     data["isMulti"] = isMulti
+    data["uid"] = request.json.get("uid")
+    costing = mongo.db.costing.find_one({"uid": data["uid"]})
+    if isSubscription:
+        data["price"] = costing["subscriptionPrice"]
+    else:
+        data["price"]= costing["price"]
     data["createdDate"] = datetime.now()
     try:
         if data["gst_treatment"] not in [
@@ -2373,6 +2409,11 @@ def postDeviceStatus():
     else:
         return jsonify({"message": "Authorization Error"}), 403
 
+@app.route('/franchisee/getAboutVideo', methods=['GET'])
+@cross_origin()
+def getAboutVideo():
+    file = 'TableTop3nozzles.mp4'
+    return send_from_directory('public/video', file)
 
 # @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
 # def zoho_crm_create():
