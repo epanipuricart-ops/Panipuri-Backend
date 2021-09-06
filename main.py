@@ -403,7 +403,7 @@ def startMeeting():
 
     data = {
         "startDate": "2021-08-28T07:21:00.000Z",
-        "endDate": "2021-08-31T07:20:00.000Z",
+        "endDate": "2021-09-05T07:20:00.000Z",
         "fields": ["hostRoomUrl"],
     }
 
