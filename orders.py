@@ -522,6 +522,21 @@ def placeOrder():
     return jsonify({"message": "Missing fields while creating order"}), 400
 
 
+@app.route('/orderOnline/getSalesAmount', methods=['GET'])
+@cross_origin()
+@verify_token
+def getSalesAmount():
+    cartId = request.args.get("cartId")
+    startms = int(request.args.get("startms"))
+    endms = int(request.args.get("endms"))
+    totalSales = mongo.db.online_orders.find({
+        "cartId": cartId,
+        "timestamp": {"$gt":  startms, "$lt": endms}
+    },       {"_id": 0, "total": 1})
+    totalSalesAmount = sum(sale["total"] for sale in totalSales)
+    return jsonify({"totalSalesAmount": totalSalesAmount})
+
+
 @app.route('/orderOnline/getStatistics', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -825,6 +840,7 @@ def getOrderByTypeAndStatus():
         query, {"_id": 0}).sort("timestamp", -1)
     return jsonify({"orders": list(orders)})
 
+
 @app.route('/orderOnline/pendingOrders', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -836,11 +852,13 @@ def pendingOrders():
                              "verify_aud": False
                          })
     email = decoded['email']
-    pending_data = mongo.db.online_orders.find({"customerEmail": email, "orderStatus": "pending"},{"_id": 0}).sort("timestamp", -1)
+    pending_data = mongo.db.online_orders.find(
+        {"customerEmail": email, "orderStatus": "pending"}, {"_id": 0}).sort("timestamp", -1)
     if pending_data:
-        return jsonify({"orders": list(pending_data) })
+        return jsonify({"orders": list(pending_data)})
     else:
-        return jsonify({"orders": [] })
+        return jsonify({"orders": []})
+
 
 @app.route('/orderOnline/ongoingOrders', methods=['GET'])
 @cross_origin()
@@ -897,7 +915,7 @@ def generateInvoice():
     if order_data:
         device_id = mongo.db.device_ids.find_one(
             {"device_id": order_data.get("cartId")})
-        items_format = r"|itemName| & \centering |qty| & \centering RS. |price| & \multicolumn{1}{r}{ RS. |totalPrice| }\\"
+        items_format = r"|itemName| & \centering |qty| & \centering INR |price| & \multicolumn{1}{r}{ INR |totalPrice| }\\"
         items_list = []
         for item in order_data["items"]:
             item_str = items_format
@@ -924,7 +942,7 @@ def generateInvoice():
         for k, v in order_data.items():
             latex_data = latex_data.replace("|"+k+"|", str(v))
         tmp_file = os.path.join(
-            INVOICE_PDF_FOLDER, generate_custom_id()+".tex")
+            INVOICE_PDF_FOLDER, orderId+".tex")
         with open(tmp_file, "w") as lfile:
             lfile.write(latex_data)
         process = subprocess.Popen([
