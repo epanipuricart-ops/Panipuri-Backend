@@ -396,6 +396,7 @@ def register(path):
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
 
+
 @app.route('/franchisee/startMeeting', methods=['POST'])
 @cross_origin()
 def startMeeting():
@@ -424,7 +425,6 @@ def startMeeting():
     print("Room URL:", data["roomUrl"])
     print("Host room URL:", data["hostRoomUrl"])
     return jsonify({"room_url": data["roomUrl"]})
-
 
 
 @app.route('/franchisee/convertToSubscriber', methods=['GET'])
@@ -666,6 +666,57 @@ def reSendOTP():
         return jsonify({"message": "Missing Parameters"}), 400
 
 
+@app.route('/franchisee/saveAutofillInformation', methods=['POST'])
+@cross_origin()
+@verify_token
+def saveAutofillInformation():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+
+    valid_fields = [
+        "title", "firstName", "lastName",
+        "mobile", "aadhar", "fatherName",
+        "address", "town", "pincode",
+        "state", "location", "termsAndConditions"
+        "isSubscriber", "isMulti", "gst_no", "gst_treatment"]
+    data = {field: str(request.json.get(field, "")) for field in valid_fields}
+    try:
+        mongo.db.autofill_forms.update_one(
+            {"email": email, "isConverted": False}, {
+                "$set": data
+            }, upsert=True)
+        return jsonify({"message": "Successfully saved"})
+    except Exception:
+        return jsonify({"message": "Some error occurred"}), 500
+
+
+@app.route('/franchisee/getAutofillInformation', methods=['GET'])
+@cross_origin()
+@verify_token
+def getAutofillInformation():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    try:
+        obj = mongo.db.autofill_forms.find_one(
+            {"email": email, "isConverted": {"$ne": True}}, {"_id": 0})
+        if obj:
+            return obj
+        else:
+            return jsonify({"message", "No saved data"}), 404
+    except Exception:
+        return jsonify({"message": "Some error occurred"}), 500
+
+
 @app.route('/franchisee/saveGeneralInformation', methods=['POST'])
 @cross_origin()
 @verify_token
@@ -771,7 +822,7 @@ def saveGeneralForm():
     if isSubscription:
         data["price"] = costing["subscriptionPrice"]
     else:
-        data["price"]= costing["price"]
+        data["price"] = costing["price"]
     data["createdDate"] = datetime.now()
     try:
         if data["gst_treatment"] not in [
@@ -1253,6 +1304,10 @@ def uploadDocuments():
                                     }})
 
         client = mongo.db.general_forms.find_one_and_update(
+            {"email": email, "isConverted": False},
+            {"$set": {"isConverted": True}}
+        )
+        mongo.db.autofill_forms.update_one(
             {"email": email, "isConverted": False},
             {"$set": {"isConverted": True}}
         )
@@ -2411,6 +2466,7 @@ def postDeviceStatus():
     else:
         return jsonify({"message": "Authorization Error"}), 403
 
+
 @app.route('/franchisee/getAboutVideo', methods=['GET'])
 @cross_origin()
 def getAboutVideo():
@@ -2428,6 +2484,7 @@ def getAboutVideo():
 #             {"exportedZoho": False}, {"$set": {"exportedZoho": True}})
 #     if records:
 #         send_data_to_zoho(records)
+
 
 @scheduler.task('cron', id='zoho_token_refresh', minute='*/30')
 def zoho_token_refresh():
