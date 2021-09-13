@@ -401,10 +401,10 @@ def register(path):
 @cross_origin()
 def startMeeting():
     API_KEY = cfg.WherebyConfig["API_KEY"]
-
+    now = datetime.now()
     data = {
-        "startDate": "2021-08-28T07:21:00.000Z",
-        "endDate": "2021-09-05T07:20:00.000Z",
+        "startDate": now.isoformat(),
+        "endDate": (now+timedelta(hours=24)).isoformat(),
         "fields": ["hostRoomUrl"],
     }
 
