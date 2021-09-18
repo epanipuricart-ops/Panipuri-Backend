@@ -16,6 +16,7 @@ from config import config as cfg
 import re
 import subprocess
 import requests
+from pymongo.collection import ReturnDocument
 
 
 INVOICE_PDF_FOLDER = 'public/invoice_pdf'
@@ -59,6 +60,16 @@ def generate_custom_id():
         binascii.b2a_hex(os.urandom(4)).decode() +
         hex(int(time.time()*10**5) % 10**12)[2:]
     )
+
+
+def generate_order_id():
+    data = mongo.db.sequence_counter.find_one_and_update(
+        {"id": "order"}, {"$inc": {"value": 1}},
+        return_document=ReturnDocument.AFTER)
+    if data is None:
+        mongo.db.sequence_counter.insert_one({"id": "order", "value": 10000})
+        data = dict(value=10000)
+    return data["value"]
 
 
 @app.route('/orderOnline/getMenu', methods=['GET'])
@@ -493,7 +504,7 @@ def placeOrder():
                 {"itemId": d["itemId"], "itemName": d["itemName"],
                  "price": d["price"], "qty": qty})
         orderFields = {
-            "orderId": generate_custom_id(),
+            "orderId": str(generate_order_id()),
             "timestamp": int(round(time.time() * 1000)),
             "orderStatus": "placed",
             "subTotal": extraData["subTotal"],
@@ -649,7 +660,7 @@ def removeFromOrderCartManual():
 @cross_origin()
 @verify_token
 def newOrderId():
-    orderId = {"orderId": generate_custom_id()}
+    orderId = {"orderId": str(generate_order_id())}
     mongo.db.online_orders.insert_one(orderId)
     orderId.pop("_id", None)
     return jsonify(orderId)
