@@ -814,6 +814,15 @@ def updateOrderStatus():
                 {"cartId": order_data["cartId"]})["sid"]
             socketio.emit("receiveConfirmedOrder", order_data_updated,
                           json=True, room=sid_list)
+        elif status == 'delivered' and order_data['orderType'] == 'delivery':
+            mop = request.json['modeOfPayment']
+            mongo.db.online_orders.update_one(
+                {"orderId": orderId},
+                {"$set": {
+                    "orderStatus": status,
+                    "modeOfPayment": mop
+                }})
+
         else:
             mongo.db.online_orders.update_one(
                 {"orderId": orderId},
