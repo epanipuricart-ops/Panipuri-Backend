@@ -2003,6 +2003,139 @@ def getCitiesByState():
     return jsonify({"message": "No State provided"}), 400
 
 
+@app.route('/franchisee/getShoppingMenu', methods=['GET'])
+@cross_origin()
+@verify_token
+def getShoppingMenu():
+    items = mongo.db.shopping_menu.find({}, {"_id": 0})
+    return jsonify({"items": list(items)})
+
+
+@app.route('/franchisee/placeOrder', methods=['POST'])
+@cross_origin()
+@verify_token
+def placeOrder():
+    data = request.json
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    valid_fields = [
+        "deliveryAddress",
+        "modeOfPayment",
+        "transactionId"]
+    if "transactionId" not in data:
+        data["transactionId"] = ""
+    customerData = mongo.db.clients.find_one({"email": email})
+    if not customerData:
+        return jsonify({"message": "No such customer found"}), 400
+    customerName = " ".join([
+        customerData.get("title", ""),
+        customerData.get("firstName"),
+        customerData.get("lastName")])
+    customerName = customerName.strip()
+    data.update({"customerName": customerName, "customerEmail": email,
+                 "customerPhone": customerData.get("mobile")})
+    createOrder = data
+    valid_flag = all(field in data for field in valid_fields)
+    items_arr = []
+
+    if valid_flag:
+        cart = mongo.db.shopping_cart.find_one(
+            {"email": email}, {"_id": 0})
+        if not cart:
+            return jsonify({"message": "Cart Empty"}), 400
+        itemsDict = {}
+        for item in cart.get("items", []):
+            itemsDict[item] = itemsDict.get(item, 0)+1
+
+        data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
+        itemsList = list(itemsDict.keys())
+        data = mongo.db.shopping_menu.aggregate([
+            {"$unwind": "$items"},
+            {
+                "$match":
+                {
+                    "items.itemId": {"$in": itemsList}
+                }
+            },
+            {
+                "$project":
+                {
+                    "_id": 0,
+                    "itemId": "$items.itemId",
+                    "itemName": "$items.name",
+                    "gst": 1,
+                    "price": "$items.price",
+                    "closeCategory": 1
+                }
+            }
+        ])
+        data = list(data)
+        if any(d["closeCategory"] for d in data):
+            return jsonify(
+                {"message":
+                 "One or more items are ordered from a closed category"}), 400
+        subTotal = 0
+        items_arr = []
+        for d in data:
+            qty = itemsDict.get(d["itemId"], 1)
+            subTotal += float(d["price"])*int(qty)
+            items_arr.append(
+                {"itemId": d["itemId"], "itemName": d["itemName"],
+                 "price": d["price"], "qty": qty, "gst": d["gst"]})
+        orderFields = {
+            "orderId": generate_custom_id(),
+            "timestamp": int(round(time.time() * 1000)),
+            "orderStatus": "placed",
+            "subTotal": subTotal,
+            "manualBilling": False,
+            "total": round(subTotal, 2)
+        }
+        createOrder.update(orderFields)
+        createOrder["items"] = items_arr
+        mongo.db.shopping_orders.insert_one(createOrder)
+        mongo.db.shopping_cart.delete_one({"email": email})
+        createOrder.pop("_id", None)
+        return jsonify(createOrder)
+    return jsonify({"message": "Missing fields while creating order"}), 400
+
+
+@app.route('/franchisee/getOrderDetails', methods=['GET'])
+@cross_origin()
+def getOrderDetails():
+    orderId = request.args.get("orderId")
+    if orderId:
+        orderInfo = mongo.db.shopping_orders.find_one(
+            {"orderId": orderId},
+            {"_id": 0})
+        if orderInfo:
+            return jsonify(orderInfo)
+        return jsonify({"message": "No such orderId exists"})
+    return jsonify({"message": "No orderId sent"})
+
+
+@app.route('/franchisee/updateOrderStatus', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateOrderStatus():
+    data = request.json
+    orderId = data.get("orderId")
+    status = data.get("status")
+
+    if orderId and status:
+        mongo.db.shopping_orders.update_one(
+            {"orderId": orderId},
+            {"$set": {
+                "orderStatus": status
+            }})
+        return jsonify({"message": "Success"})
+    return jsonify({"message": "Missing fields"}), 400
+
+
 @app.route('/franchisee/getAllCategories', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -2031,7 +2164,7 @@ def createShopCategory():
     if data is None:
         return jsonify({"message": "No JSON data sent"}), 400
 
-    valid_fields = ["category", "closeCategory"]
+    valid_fields = ["category", "closeCategory", "sellerName", "gst"]
     createCategory = {field: value for field,
                       value in data.items() if field in valid_fields}
 
