@@ -811,7 +811,7 @@ def saveGeneralForm():
     elif isSubscription or isMulti:
         data["selectedTowns"] = request.json.get("selectedTowns", [])
     else:
-        data["town"] = request.json.get("selectedTowns", "")
+        data["town"] = request.json.get("town", "")
     data["status"] = 0
     data["formId"] = generate_custom_id()
     data["email"] = email
