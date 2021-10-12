@@ -400,6 +400,8 @@ def register(path):
 @app.route('/franchisee/startMeeting', methods=['POST'])
 @cross_origin()
 def startMeeting():
+    mobile = request.json['mobile']
+    email = request.json['email']
     API_KEY = cfg.WherebyConfig["API_KEY"]
     now = datetime.now()
     data = {
@@ -424,6 +426,20 @@ def startMeeting():
     print(data)
     print("Room URL:", data["roomUrl"])
     print("Host room URL:", data["hostRoomUrl"])
+    payload = {
+                            "attachmentPaths": [
+                                
+                            ],
+                            "bccAddresses": [],
+                            "ccAddresses": [],
+                            "mailBody": "Someone with mobile " + str(mobile) + " and email " + str(email) + " has requested a meeting with you. Your host url is " + str(data["hostRoomUrl"]),
+                            "mailSubject": "Whereby Mail",
+                            "toAddresses": [
+                             "harish.k.neotia@gmail.com", "jyotimay16@gmail.com"
+                            ]
+                        }
+    requests.post(mailer_url+'send-mail',json=payload)
+    requests.post(spring_url+'api/message/send-whereby', json={'email': str(email), 'mediaUrl': str(data['hostRoomUrl']), 'message': '', 'name': '', 'phone': '','type': 0 })
     return jsonify({"room_url": data["roomUrl"]})
 
 
@@ -511,7 +527,7 @@ def login(path):
                              })
         data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
         if data:
-            if 'super' in data['roles']:
+            if 'super' in data['roles'] or 'admin' in data['roles']:
                 return jsonify({
                     'name': data['name'],
                     'email': data['email'],
@@ -1731,7 +1747,7 @@ def getBlogImage(path):
 @cross_origin()
 @verify_token
 def deleteBlog():
-    blogId = request.form.get('blogId')
+    blogId = request.json.get('blogId')
     if not blogId:
         return jsonify({"message": "No Blog ID provided"}), 400
     data = mongo.db.blogs.find_one_and_delete({"blogId": blogId})
@@ -2519,6 +2535,17 @@ def uploadLevel():
         new_data = existing_data + data
         mongo.db.levels.update_one({'uid': uid}, {'$set': {"data": new_data}})
         return jsonify({"message": "SUCCESS"})
+    else:
+        return jsonify({"message": "Authorization error"}), 403
+
+@app.route('/getLatestLevel', methods=['GET', 'POST'])
+@cross_origin()
+def latestLevel():
+    if request.method == "GET":
+        uid = request.args.get("deviceId")
+        data = mongo.db.levels.find_one({'uid': uid})['data'][-3:]
+        print(data)
+        return jsonify({"n1": data[0]["low"], "n2": data[1]["low"], "n3": data[2]["low"]})
     else:
         return jsonify({"message": "Authorization error"}), 403
 
