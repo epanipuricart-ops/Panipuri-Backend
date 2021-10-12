@@ -900,9 +900,12 @@ def acceptMultiUnitForm():
         mongo.db.clients.update_one(
             {'email': email},
             {
-                '$addToSet': {'roles': 'form_accepted'}
-            }, {
-                '$pull': {'roles': 'in_review'}
+                '$addToSet': {'roles': 'form_accepted'},
+            })
+        mongo.db.clients.update_one(
+            {'email': email},
+            {
+                '$pull': {'roles': 'in_review'},
             })
         return jsonify({"message": "Form is accepted"})
     else:
@@ -915,7 +918,7 @@ def acceptMultiUnitForm():
             {
                 '$pull': {'roles': 'in_review'}
             })
-        return jsonify({"message": "Form is rejected"})
+        return jsonify({"message": "Form is rejected"}), 403
 
 
 @app.route('/franchisee/getPendingForms', methods=['GET'])
