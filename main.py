@@ -769,7 +769,7 @@ def saveGeneralInformation():
     else:
         try:
             data.update({"isConverted": False, "email": email})
-            mongo.db.general_forms.insert_one(email)
+            mongo.db.general_forms.insert_one(data)
             update_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
         except Exception:
@@ -827,13 +827,14 @@ def saveGeneralForm():
     elif isSubscription or isMulti:
         data["selectedTowns"] = request.json.get("selectedTowns", [])
     else:
-        data["town"] = request.json.get("selectedTowns", "")
+        data["town"] = request.json.get("town", "")
     data["status"] = 0
     data["formId"] = generate_custom_id()
     data["email"] = email
     data["isSubscription"] = isSubscription
     data["isMulti"] = isMulti
     data["uid"] = request.json.get("uid")
+    data["isConverted"] = False
     costing = mongo.db.costing.find_one({"uid": data["uid"]})
     if isSubscription:
         data["price"] = costing["subscriptionPrice"]
@@ -1252,6 +1253,19 @@ def getAllOrders():
         return jsonify({"message": "Some error occurred"}), 500'''
 
 
+@app.route('/franchisee/createDefaultMenu', methods=['GET'])
+@cross_origin()
+def createDefaultMenu():
+    cartId = request.args.get('cartId')
+    default_menu = cfg.DefaultMenu.copy()
+    for category in default_menu["menu"]:
+        category.update({"categoryId": generate_custom_id()})
+        for item in category["items"]:
+            item.update({"itemId": generate_custom_id()})
+    mongo.db.menu.update_one({"cartId": cartId},
+                             {"$set": default_menu})
+
+
 @app.route('/franchisee/uploadDocuments', methods=['POST'])
 @cross_origin()
 @verify_token
@@ -1355,7 +1369,7 @@ def uploadDocuments():
             category.update({"categoryId": generate_custom_id()})
             for item in category["items"]:
                 item.update({"itemId": generate_custom_id()})
-        mongo.db.menu.insert_one({"cartId": device_data["device_id"]},
+        mongo.db.menu.update_one({"cartId": device_data["device_id"]},
                                  {"$set": default_menu})
 
         # trigger iot register api
