@@ -250,6 +250,27 @@ def switchmode():
             return jsonify({"message": "Authentication error"}), 401
     else:
         return jsonify({"message": "Authorization Error"}), 403
+        
+@app.route("/wizard/switchMode", methods=['GET', 'POST'])
+@cross_origin()
+def switchMode():
+    if request.method == "POST":
+        uid = request.json["customerId"]
+        if True:
+            devices = mongo.db.devices
+            mode = request.json["mode"]
+            try:
+                devices.update_one({"uid": uid}, {'$set': {"mode": mode}})
+                if mode == 0:
+                    return jsonify({"mode": 0, "message": "Device set to operation mode"})
+                else:
+                    return jsonify({"mode": 1, "message": "Device set to cleaning mode"})
+            except:
+                return jsonify({"mode": 2, "message": "Some error occured"})
+        else:
+            return jsonify({"message": "Authentication error"}), 401
+    else:
+        return jsonify({"message": "Authorization Error"}), 403
 
 
 @app.route("/postDeviceStatus", methods=['GET', 'POST'])

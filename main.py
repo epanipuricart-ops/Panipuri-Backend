@@ -439,7 +439,7 @@ def startMeeting():
                             ]
                         }
     requests.post(mailer_url+'send-mail',json=payload)
-    requests.post(spring_url+'api/message/send-whereby', json={'email': str(email), 'mediaUrl': str(data['hostRoomUrl']), 'message': '', 'name': '', 'phone': '','type': 0 })
+    requests.post(spring_url+'api/message/send-whereby', json={'email': str(email), 'mediaUrl': str(data['hostRoomUrl']), 'message': '', 'name': '', 'phone': str(mobile),'type': 0 })
     return jsonify({"room_url": data["roomUrl"]})
 
 
