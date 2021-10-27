@@ -427,19 +427,20 @@ def startMeeting():
     print("Room URL:", data["roomUrl"])
     print("Host room URL:", data["hostRoomUrl"])
     payload = {
-                            "attachmentPaths": [
-                                
-                            ],
-                            "bccAddresses": [],
-                            "ccAddresses": [],
-                            "mailBody": "Someone with mobile " + str(mobile) + " and email " + str(email) + " has requested a meeting with you. Your host url is " + str(data["hostRoomUrl"]),
-                            "mailSubject": "Whereby Mail",
-                            "toAddresses": [
-                             "harish.k.neotia@gmail.com", "jyotimay16@gmail.com"
-                            ]
-                        }
-    requests.post(mailer_url+'send-mail',json=payload)
-    requests.post(spring_url+'api/message/send-whereby', json={'email': str(email), 'mediaUrl': str(data['hostRoomUrl']), 'message': '', 'name': '', 'phone': str(mobile),'type': 0 })
+        "attachmentPaths": [
+
+        ],
+        "bccAddresses": [],
+        "ccAddresses": [],
+        "mailBody": "Someone with mobile " + str(mobile) + " and email " + str(email) + " has requested a meeting with you. Your host url is " + str(data["hostRoomUrl"]),
+        "mailSubject": "Whereby Mail",
+        "toAddresses": [
+            "harish.k.neotia@gmail.com", "jyotimay16@gmail.com"
+        ]
+    }
+    requests.post(mailer_url+'send-mail', json=payload)
+    requests.post(spring_url+'api/message/send-whereby', json={'email': str(email), 'mediaUrl': str(
+        data['hostRoomUrl']), 'message': '', 'name': '', 'phone': str(mobile), 'type': 0})
     return jsonify({"room_url": data["roomUrl"]})
 
 
@@ -2555,6 +2556,7 @@ def uploadLevel():
     else:
         return jsonify({"message": "Authorization error"}), 403
 
+
 @app.route('/getLatestLevel', methods=['GET', 'POST'])
 @cross_origin()
 def latestLevel():
@@ -2682,8 +2684,10 @@ def move_agreement_pdf():
 @scheduler.task('cron', id='clear_sid', minute=0, hour=2)
 def clear_sid():
     mongo.db.menu.update_many({}, {"$set": {"sid": []}})
-    mongo.db.devices.update_many({}, {"$set":
-                                      {"activeState": 0, "deviceState": 0}})
+    mongo.db.devices.update_many(
+        {"uid": {"$nin": cfg.DEVICE_SHUTDOWN_EXCEPTION}},
+        {"$set": {"activeState": 0, "deviceState": 0}}
+    )
     mongo.db.customer_sid.update_many({}, {"$set": {"sid": []}})
     for f in os.listdir(MOU_PDF_PATH):
         os.remove(os.path.join(MOU_PDF_PATH, f))
