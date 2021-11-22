@@ -24,7 +24,7 @@ WherebyConfig = {
 }
 
 ZohoConfig = {
-    "refresh_token": "1000.510cb546d2f8355230a541d619043fbe.bfa28cbbfce2dff97ccffcfd686a7594",
+    "refresh_token": "1000.fa1bac339954cbd1fe59a51b0237872b.47b52b1d3039bed2c657f2f6669a24da",
     "client_id": "1000.TM9579QXAQRONAPUYM8I9V3JR1AIZY",
     "client_secret": "3e4811b9ced7df56e36e1e5090c49b012c03092fb9",
     "organization_id": "60003188756"

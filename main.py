@@ -9,7 +9,7 @@ import time
 import os
 import binascii
 from werkzeug.utils import secure_filename
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import config.config as cfg
 from modules import *
 import firebase_admin
@@ -306,6 +306,49 @@ def create_zoho_sales_order(customer_id, item_id):
         }).json()
     if response.get("code") == 0:
         return response.get("salesorder").get("salesorder_id")
+
+
+def create_zoho_retainer_invoice(customer_id, item_name, price):
+    response = requests.post(
+        "https://books.zoho.in/api/v3/invoices",
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        },
+        json={
+            "customer_id": customer_id,
+            "date": date.today().strftime("%Y-%m-%d"),
+            "line_items": [{
+                "description": item_name,
+                "rate": price
+            }]
+        }).json()
+    if response.get("code") == 0:
+        return response.get("retainerinvoice").get("retainerinvoice_id")
+
+
+def create_zoho_customer_payments(customer_id):
+    retainerinvoice = mongo.db.retainer_invoices.find_one(
+        {"customer_id": customer_id}, sort=[('timestamp', -1)])
+    response = requests.post(
+        "https://books.zoho.in/api/v3/customerpayments",
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        },
+        json={
+            "customer_id": customer_id,
+            "date": date.today().strftime("%Y-%m-%d"),
+            "amount": retainerinvoice.get("amount"),
+            "retainerinvoice_id": retainerinvoice.get("invoice_id"),
+            "payment_mode": "Cash"
+        }).json()
+    if response.get("code") == 0:
+        return response.get("payment").get("payment_id")
 
 
 @app.route('/franchisee/register/<path:path>', methods=['POST'])
@@ -1019,6 +1062,19 @@ def payNow():
     # print(post)
     res = requests.post(payment_url + '/api/payment/checkout', json=post)
     res = res.json()
+    # Create retainer invoice
+    customer_id = mongo.db.zoho_customers.find_one({'email': email})
+    if customer_id:
+        invoice_id = create_zoho_retainer_invoice(
+            customer_id['zohoId'], post['productinfo'], float(post['amount']))
+        mongo.db.retainer_invoices.insert_one(
+            {
+                "email": email,
+                "invoice_id": invoice_id,
+                "customer_id": customer_id['zohoId'],
+                "amount": float(post['amount']),
+                "timestamp": int(round(time.time() * 1000)),
+            })
     # print(res)
     hash_uid = mongo.db.hash_counter.find_one({"id": 1})['hash_uid']
     res['payment_uid'] = hash_uid
@@ -1076,6 +1132,11 @@ def payuSuccess():
             "mihpayid": mihpayid
         }
     })
+
+    customer_id = mongo.db.zoho_customers.find_one(
+        {'email': txn_data['email']})
+    if customer_id:
+        create_zoho_customer_payments(customer_id['zohoId'])
     # currentRoles = mongo.db.clients.find_one(
     #     {"email": txn_data['email']}, {"roles": 1})
     # currentRoles = currentRoles.get("roles", [])
