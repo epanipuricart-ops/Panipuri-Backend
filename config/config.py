@@ -30,6 +30,8 @@ ZohoConfig = {
     "organization_id": "60003188756"
 }
 
+DEVICE_SHUTDOWN_EXCEPTION = ["epanipuricart.Bhubaneswar.1"]
+
 DefaultMenu = {
     "cartName": "My Cart",
     "deliveryCharge": 0,
