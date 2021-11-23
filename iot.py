@@ -599,7 +599,7 @@ def wizardGetCountByDate():
         end = request.json['end']
         s = int(datetime.strptime(start, "%m-%d-%Y").timestamp()*1000)
         e = int(datetime.strptime(end, "%m-%d-%Y").timestamp()*1000)
-        uid = request.args.get('customerId')
+        uid = request.json.get('customerId')
         if True:
             response = mongo.db.counter.find_one({"uid": uid})
             if response:
