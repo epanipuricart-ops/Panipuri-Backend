@@ -310,7 +310,7 @@ def create_zoho_sales_order(customer_id, item_id):
 
 def create_zoho_retainer_invoice(customer_id, item_name, price):
     response = requests.post(
-        "https://books.zoho.in/api/v3/invoices",
+        "https://books.zoho.in/api/v3/retainerinvoices",
         params={
             "organization_id": cfg.ZohoConfig.get("organization_id")
         },
@@ -326,6 +326,7 @@ def create_zoho_retainer_invoice(customer_id, item_name, price):
             }]
         }).json()
     if response.get("code") == 0:
+        print(response)
         return response.get("retainerinvoice").get("retainerinvoice_id")
 
 
@@ -1063,8 +1064,11 @@ def payNow():
     res = requests.post(payment_url + '/api/payment/checkout', json=post)
     res = res.json()
     # Create retainer invoice
-    customer_id = mongo.db.zoho_customers.find_one({'email': email})
+    customer_id = mongo.db.zoho_customer.find_one({'email': email})
+    print(email)
+    print(customer_id)
     if customer_id:
+        print("reached")
         invoice_id = create_zoho_retainer_invoice(
             customer_id['zohoId'], post['productinfo'], float(post['amount']))
         mongo.db.retainer_invoices.insert_one(
@@ -1133,7 +1137,7 @@ def payuSuccess():
         }
     })
 
-    customer_id = mongo.db.zoho_customers.find_one(
+    customer_id = mongo.db.zoho_customer.find_one(
         {'email': txn_data['email']})
     if customer_id:
         create_zoho_customer_payments(customer_id['zohoId'])
@@ -1180,7 +1184,7 @@ def payuSuccess():
         "town": city,
         "location": data.get("location"),
         "order_id": "EK-" + str(order_id),
-        "isSubscriber": data["isSubscriber"]
+        "isSubscription": data["isSubscription"]
     })
     mongo.db.order_history.insert_one({
         "order_id": order_id,
