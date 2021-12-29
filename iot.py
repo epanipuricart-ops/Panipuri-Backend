@@ -341,6 +341,20 @@ def updateSettings():
     else:
         return jsonify({"message": "Authorization Error"}), 403
 
+@app.route("/wizard/updateSettings", methods=[ 'POST'])
+@cross_origin()
+def wizardUpdateSettings():
+    if request.method == "POST":        
+        uid = request.json['customerId']
+        if True:
+            devices = mongo.db.devices
+            setting = request.json['setting']
+            devices.update_one({"uid": uid}, {'$set': {"settings": setting}})
+            return jsonify({"message": "SUCCESS"})
+        else:
+            return jsonify({"message": "Authentication error"}), 401
+    else:
+        return jsonify({"message": "Authorization Error"}), 403
 
 # route to fetch device data
 @app.route("/getDeviceData", methods=['GET', 'POST'])
