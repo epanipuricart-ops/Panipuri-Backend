@@ -24,6 +24,34 @@ def generate_custom_id():
     )
 
 
+@app.route('/wizard/login', methods=['POST'])
+@cross_origin()
+def wizardLogin():
+    email = request.json['email']
+    data = list(mongo.db.device_ids.find({"email": email}))
+    alias_data = list(mongo.db.alias_data.find({"alias_email": email}))
+    if len(data) != 0:
+        out = []
+        for ele in data:
+            out.append(ele['device_id'])
+        try:
+            name = mongo.db.clients.find_one({"email": email})['firstName']
+            res = {'email': email, 'name': name,
+                   'devices': out, 'role': 'franchisee'}
+            return jsonify(res)
+        except:
+            return jsonify({"message": "Some error occurred"}), 500
+    elif len(alias_data) != 0:
+        out = []
+        for ele in alias_data:
+            out.append(ele['device_id'])
+        data = {'email': email,
+                'name': alias_data[0]['alias_name'], 'devices': out, 'role': 'alias'}
+        return jsonify(data)
+    else:
+        return jsonify({"message": "Unauthorized Access"}), 403
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 @cross_origin()
 def upload():
@@ -250,7 +278,8 @@ def switchmode():
             return jsonify({"message": "Authentication error"}), 401
     else:
         return jsonify({"message": "Authorization Error"}), 403
-        
+
+
 @app.route("/wizard/switchMode", methods=['GET', 'POST'])
 @cross_origin()
 def switchMode():
@@ -341,10 +370,11 @@ def updateSettings():
     else:
         return jsonify({"message": "Authorization Error"}), 403
 
-@app.route("/wizard/updateSettings", methods=[ 'POST'])
+
+@app.route("/wizard/updateSettings", methods=['POST'])
 @cross_origin()
 def wizardUpdateSettings():
-    if request.method == "POST":        
+    if request.method == "POST":
         uid = request.json['customerId']
         if True:
             devices = mongo.db.devices
@@ -449,6 +479,7 @@ def getStats():
     else:
         return jsonify({"message": "Authentication Error"}), 401
 
+
 @app.route("/wizard/getStats", methods=['GET', 'POST'])
 @cross_origin()
 def wizardGetStats():
@@ -500,6 +531,7 @@ def getLevel():
     else:
         return jsonify({"message": "Authentication Error"}), 401
 
+
 @app.route("/wizard/getLevel", methods=['GET', 'POST'])
 @cross_origin()
 def wizardGetLevel():
@@ -535,6 +567,7 @@ def getCount():
             return jsonify({"message": "No record found"}), 403
     else:
         return jsonify({"message": "Authentication Error"}), 401
+
 
 @app.route("/wizard/getCount", methods=['GET', 'POST'])
 @cross_origin()
@@ -605,6 +638,7 @@ def getCountByDate():
     else:
         return jsonify({"message": "Authorization Error"}), 403
 
+
 @app.route("/wizard/getCountByDate", methods=['GET', 'POST'])
 @cross_origin()
 def wizardGetCountByDate():
@@ -649,6 +683,7 @@ def wizardGetCountByDate():
         else:
             return jsonify({"message": "Authentication error"}), 401
 
+
 @app.route("/wizard/getProfile", methods=['GET'])
 @cross_origin()
 def getProfile():
@@ -682,12 +717,14 @@ def updateProfileWizard():
         })
     return jsonify({"message": "Success"})
 
+
 @app.route("/wizard/postESPStatus", methods=['POST'])
 @cross_origin()
 def postESPStatus():
     data = request.json
     print(data['position'] + " " + "of " + data["deviceId"] + " is healthy")
     return jsonify({"message": "Success"})
+
 
 @app.route("/wizard/updatePayment/<action>", methods=['POST'])
 @cross_origin()
@@ -712,7 +749,7 @@ def updatePayment(action):
             },
             {
                 "$push": {"paymentMethods": updatePay}
-            },upsert=True)
+            }, upsert=True)
     elif action == "remove":
         methodId = data.get("methodId")
         if not methodId:

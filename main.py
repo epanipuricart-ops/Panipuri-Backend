@@ -1931,43 +1931,25 @@ def getCartId():
 @cross_origin()
 def wizardLogin():
     email = request.json['email']
-    data = list(mongo.db.device_ids.find({"email": email}))
-    alias_data = list(mongo.db.alias_data.find({"alias_email": email}))
-    if len(data) != 0:
-        out = []
-        for ele in data:
-            out.append(ele['device_id'])
-        name = mongo.db.clients.find_one({"email": email})['firstName']
-        res = {'email': email, 'name': name, 'devices': out}
-        return jsonify(res)
-    elif len(alias_data) != 0:
-        out = []
+    device_id = request.json['customerId']
+    data = mongo.db.device_ids.find_one({'device_id': device_id})
+    alias_data = mongo.db.alias_data.find({'device_id': device_id})
+    list_alias_email = []
+    if alias_data:
         for ele in alias_data:
-            out.append(ele['device_id'])
-        data = {'email': email,
-                'name': alias_data[0]['alias_name'], 'devices': out}
-        return jsonify(data)
+            list_alias_email.append(ele['alias_email'])
+    if (email == data['email']):
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "franchisee"})
+    elif (email in list_alias_email):
+        return jsonify({
+            "message": "Successful Login",
+            "customerId": device_id,
+            "role": "alias"})
     else:
-        return jsonify({"message": "Unauthorized Access"}), 403
-    # device_id = request.json['customerId']
-    # data = mongo.db.device_ids.find_one({'device_id': device_id})
-    # alias_data = mongo.db.alias_data.find({'device_id': device_id})
-    # list_alias_email = []
-    # if alias_data:
-    #     for ele in alias_data:
-    #         list_alias_email.append(ele['alias_email'])
-    # if (email == data['email']):
-    #     return jsonify({
-    #         "message": "Successful Login",
-    #         "customerId": device_id,
-    #         "role": "franchisee"})
-    # elif (email in list_alias_email):
-    #     return jsonify({
-    #         "message": "Successful Login",
-    #         "customerId": device_id,
-    #         "role": "alias"})
-    # else:
-    #     return jsonify({"message": "Authentication Error"}), 401
+        return jsonify({"message": "Authentication Error"}), 401
 
 
 @app.route('/franchisee/addAliasData', methods=['POST'])
