@@ -354,6 +354,22 @@ def create_zoho_customer_payments(customer_id, reference_number):
         return response.get("payment").get("payment_id")
 
 
+def interaktOTP(name, otp):
+    headers = {
+        "Authorization": "Basic MjgtZ2U1NlptN3lMbTM1R1JQcUlwVk5XVmNycTVlcHVxRDFBdkRMSkVVbzo="
+    }
+    data = {
+        "phoneNumber": "9437992433",
+        "countryCode": "+91",
+        "event": "SendOTP",
+        "traits": {"name": name, "otp": otp},
+        "mediaUrl": "http://15.207.147.88:5000/franchisee/getLogo"
+    }
+    requests.post("https://api.interakt.ai/v1/public/track/events/",
+                  headers=headers, json=data)
+    return jsonify({"message": "Success"})
+
+
 @app.route('/franchisee/register/<path:path>', methods=['POST'])
 @cross_origin()
 def register(path):
@@ -2725,6 +2741,7 @@ def postDeviceStatus():
 def getAboutVideo():
     file = 'TableTop3nozzles.mp4'
     return send_from_directory('public/video', file)
+
 
 # @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
 # def zoho_crm_create():
