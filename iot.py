@@ -963,7 +963,7 @@ def payNowWizard():
                     "_id": 0,
                     "itemId": "$items.itemId",
                     "itemName": "$items.name",
-                    "gst": 0,
+                    "gst": 1,
                     "price": "$items.price",
                     "closeCategory": 1
                 }
