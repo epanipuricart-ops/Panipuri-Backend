@@ -3,6 +3,7 @@ from flask import (Flask, session, send_from_directory, send_file,
                    render_template)
 from flask import request, redirect, url_for
 from flask_pymongo import PyMongo
+from pymongo import ReturnDocument
 from flask import jsonify
 from flask_cors import CORS, cross_origin
 from flask_apscheduler import APScheduler
@@ -2752,7 +2753,7 @@ def createStockUnit():
         "description": data.get("description", ""),
         "price": data["price"],
         "stockId": generate_custom_id(),
-        "quantity": data["quantity"]
+        "quantity": int(data["quantity"])
     }
     mongo.db.stock.insert_one(record)
     return jsonify({"message": "SUCCESS"})
@@ -2763,9 +2764,10 @@ def createStockUnit():
 def getStockUnit():
     stockId = request.args.get('stockId')
     if stockId:
-        data = mongo.db.stock.find_one({"stockId": stockId})
+        data = mongo.db.stock.find_one({"stockId": stockId}, {"_id": 0})
         return jsonify(data)
-    return jsonify({"message": "Invalid Stock Id"}), 403
+    data = mongo.db.stock.find({}, {"_id": 0})
+    return jsonify(list(data))
 
 
 @app.route('/franchisee/updateStockUnit', methods=['PUT'])
@@ -2789,9 +2791,13 @@ def increaseStockUnit():
     stockId = data.get('stockId')
     quantity = int(data.get('quantity'))
     if stockId and quantity > 0:
-        mongo.db.stock.update_one({"stockId": stockId}, {
-                                  '$inc': {"quantity": quantity}})
-        return jsonify({"message": "SUCCESS"})
+        data = mongo.db.stock.find_one_and_update(
+            {"stockId": stockId},
+            {'$inc': {"quantity": quantity}},
+            {"_id": 0},
+            return_document=ReturnDocument.AFTER)
+        if data:
+            return jsonify(data)
     return jsonify({"message": "Invalid Stock Id"}), 403
 
 
@@ -2802,9 +2808,13 @@ def decreaseStockUnit():
     stockId = data.get('stockId')
     quantity = int(data.get('quantity'))
     if stockId and quantity > 0:
-        mongo.db.stock.update_one({"stockId": stockId}, {
-                                  '$inc': {"quantity": -quantity}})
-        return jsonify({"message": "SUCCESS"})
+        data = mongo.db.stock.find_one_and_update(
+            {"stockId": stockId},
+            {'$inc': {"quantity": -quantity}},
+            {"_id": 0},
+            return_document=ReturnDocument.AFTER)
+        if data:
+            return jsonify(data)
     return jsonify({"message": "Invalid Stock Id"}), 403
 
 # @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
