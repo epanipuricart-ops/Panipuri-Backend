@@ -678,7 +678,6 @@ def sendOTP():
                                          data=json.dumps(data),
                                          headers=headers)
                 json_resp = json.loads(response.text)
-                print(json_resp)
                 zoho_record = {
                     "First_Name": firstName,
                     "Last_Name": lastName,
@@ -2741,6 +2740,8 @@ def postDeviceStatus():
 def getAboutVideo():
     file = 'TableTop3nozzles.mp4'
     return send_from_directory('public/video', file)
+
+
 
 
 # @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
