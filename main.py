@@ -1,3 +1,4 @@
+from operator import ge
 from flask import (Flask, session, send_from_directory, send_file,
                    render_template)
 from flask import request, redirect, url_for
@@ -2742,7 +2743,69 @@ def getAboutVideo():
     return send_from_directory('public/video', file)
 
 
+@app.route('/franchisee/createStockUnit', methods=['POST'])
+@cross_origin()
+def createStockUnit():
+    data = request.json
+    record = {
+        "name": data["name"],
+        "description": data.get("description", ""),
+        "price": data["price"],
+        "stockId": generate_custom_id(),
+        "quantity": data["quantity"]
+    }
+    mongo.db.stock.insert_one(record)
+    return jsonify({"message": "SUCCESS"})
 
+
+@app.route('/franchisee/getStockUnit', methods=['GET'])
+@cross_origin()
+def getStockUnit():
+    stockId = request.args.get('stockId')
+    if stockId:
+        data = mongo.db.stock.find_one({"stockId": stockId})
+        return jsonify(data)
+    return jsonify({"message": "Invalid Stock Id"}), 403
+
+
+@app.route('/franchisee/updateStockUnit', methods=['PUT'])
+@cross_origin()
+def updateStockUnit():
+    data = request.json
+    stockId = data.get('stockId')
+    if stockId:
+        valid_fields = ["name", "description", "price"]
+        updateItem = {field: value for field,
+                      value in data.items() if field in valid_fields}
+        mongo.db.stock.update_one({"stockId": stockId}, {'$set': updateItem})
+        return jsonify({"message": "SUCCESS"})
+    return jsonify({"message": "Invalid Stock Id"}), 403
+
+
+@app.route('/franchisee/increaseStockUnit', methods=['POST'])
+@cross_origin()
+def increaseStockUnit():
+    data = request.json
+    stockId = data.get('stockId')
+    quantity = int(data.get('quantity'))
+    if stockId and quantity > 0:
+        mongo.db.stock.update_one({"stockId": stockId}, {
+                                  '$inc': {"quantity": quantity}})
+        return jsonify({"message": "SUCCESS"})
+    return jsonify({"message": "Invalid Stock Id"}), 403
+
+
+@app.route('/franchisee/decreaseStockUnit', methods=['POST'])
+@cross_origin()
+def decreaseStockUnit():
+    data = request.json
+    stockId = data.get('stockId')
+    quantity = int(data.get('quantity'))
+    if stockId and quantity > 0:
+        mongo.db.stock.update_one({"stockId": stockId}, {
+                                  '$inc': {"quantity": -quantity}})
+        return jsonify({"message": "SUCCESS"})
+    return jsonify({"message": "Invalid Stock Id"}), 403
 
 # @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
 # def zoho_crm_create():
