@@ -5,8 +5,11 @@ import time
 import datetime
 import os
 import binascii
+import jwt
 from config import config as cfg
 from modules import *
+from datetime import datetime, timedelta, date
+from flask_apscheduler import APScheduler
 
 app = Flask(__name__, static_url_path='')
 
@@ -15,14 +18,62 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 app.config["MONGO_URI"] = "mongodb://localhost:27017/panipuriKartz"
 # app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 mongo = PyMongo(app)
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
 
+global_key = "ueQ4sZ"
+payment_url = "http://15.207.147.88:8083/"
+ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
 def generate_custom_id():
     return (
         binascii.b2a_hex(os.urandom(4)).decode() +
         hex(int(time.time()*10**5) % 10**12)[2:]
     )
-
+    
+def refresh_zoho_access_token(force=False):
+    if (
+        force or
+        ZOHO_TOKEN["access_token"] == "" or
+        time.time()-ZOHO_TOKEN["timestamp"] >= 1800
+    ):
+        refresh_token_url = "https://accounts.zoho.in/oauth/v2/token"
+        response = requests.post(
+            refresh_token_url,
+            data={
+                "refresh_token": cfg.ZohoConfig["refresh_token"],
+                "client_id": cfg.ZohoConfig["client_id"],
+                "client_secret": cfg.ZohoConfig["client_secret"],
+                "grant_type": "refresh_token"
+            }).json()
+        ZOHO_TOKEN["access_token"] = response["access_token"]
+        ZOHO_TOKEN["timestamp"] = time.time()
+def create_zoho_retainer_invoice(customer_id, item_name, price):
+    response = requests.post(
+        "https://books.zoho.in/api/v3/retainerinvoices",
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        },
+        json={
+            "customer_id": customer_id,
+            "date": date.today().strftime("%Y-%m-%d"),
+            "line_items": [{
+                "description": item_name,
+                "rate": price
+            }]
+        }).json()
+    if response.get("code") == 0:
+        print(response)
+        return response.get("retainerinvoice").get("retainerinvoice_id")
+    
+    
+@scheduler.task('cron', id='zoho_token_refresh', minute='*/30')
+def zoho_token_refresh():
+    refresh_zoho_access_token(force=True)
 
 @app.route('/wizard/login', methods=['POST'])
 @cross_origin()
@@ -768,9 +819,253 @@ def updatePayment(action):
 
     return jsonify({"message": "Sucess"})
 
+@app.route('/wizard/getShoppingMenu', methods=['GET'])
+@cross_origin()
+#@verify_token
+def getShoppingMenu():
+    items = mongo.db.shopping_menu.find({}, {"_id": 0})
+    return jsonify({"items": list(items)})
+
+@app.route('/wizard/getAllCategories', methods=['GET'])
+@cross_origin()
+#@verify_token
+def getAllCategories():
+    categories = mongo.db.shopping_menu.find(
+        {}, {"_id": 0, "categoryId": 1, "category": 1})
+    return jsonify({"categories": list(categories)})
+
+@app.route('/wizard/getItemByCategory', methods=['GET'])
+@cross_origin()
+#@verify_token
+def getItemByCategory():
+    category_list = request.args.get('categoryId', "").split(",")
+    items = mongo.db.shopping_menu.find(
+        {"categoryId": {"$in": category_list}},
+        {"_id": 0})
+    return jsonify({"items": list(items)})
+
+@app.route('/wizard/addToShoppingCart', methods=['POST'])
+@cross_origin()
+#@verify_token
+def addToShoppingCart():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    itemId = request.json.get("itemId")
+    mongo.db.shopping_cart.update_one(
+        {"email": email},
+        {"$push": {
+            "items": itemId
+        }},
+        upsert=True)
+    return jsonify({"message": "Success"})
+
+@app.route('/wizard/removeFromShoppingCart', methods=['POST'])
+@cross_origin()
+#@verify_token
+def removeFromShoppingCart():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    itemId = request.json.get("itemId")
+    cart = mongo.db.shopping_cart.find_one({"email": email}, {"_id": 0})
+    if not cart:
+        return jsonify({"message": "Cart Empty"}), 400
+    items = cart.get("items", [])
+    if itemId in items:
+        items.remove(itemId)
+    mongo.db.shopping_cart.update_one(
+        {"email": email},
+        {"$set": {
+            "items": items
+        }},
+        upsert=True)
+    return jsonify({"message": "Success"})
+
+@app.route('/wizard/getShoppingCart', methods=['GET'])
+@cross_origin()
+#@verify_token
+def getShoppingCart():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    cart = mongo.db.shopping_cart.find_one({"email": email}, {"_id": 0})
+    if not cart:
+        return jsonify({"message": "Cart Empty"}), 400
+    items_dict = {}
+    for item in cart.get("items", []):
+        items_dict[item] = items_dict.get(item, 0)+1
+    items = [{"itemId": k, "qty": v} for k, v in items_dict.items()]
+    cart.update({"items": items})
+    return jsonify(cart)
+
+@app.route('/wizard/payNow', methods=['POST'])
+@cross_origin()
+#@verify_token
+def payNowWizard():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    client_data = mongo.db.clients.find_one({"email": email})
+    phone = client_data['mobile']
+    data = request.json
+    valid_fields = [
+        "deliveryAddress"]
+    customerData = mongo.db.clients.find_one({"email": email})
+    if not customerData:
+        return jsonify({"message": "No such customer found"}), 400
+
+    customerName = client_data['firstName']
+    data.update({"customerName": customerName, "customerEmail": email,
+                 "customerPhone": phone})
+    createOrder = data
+    valid_flag = all(field in data for field in valid_fields)
+    items_arr = []
+
+    if valid_flag:
+        cart = mongo.db.shopping_cart.find_one(
+            {"email": email}, {"_id": 0})
+        if not cart:
+            return jsonify({"message": "Cart Empty"}), 400
+        itemsDict = {}
+        for item in cart.get("items", []):
+            itemsDict[item] = itemsDict.get(item, 0)+1
+
+        data["items"] = [{"itemId": k, "qty": v} for k, v in itemsDict.items()]
+        itemsList = list(itemsDict.keys())
+        data = mongo.db.shopping_menu.aggregate([
+            {"$unwind": "$items"},
+            {
+                "$match":
+                {
+                    "items.itemId": {"$in": itemsList}
+                }
+            },
+            {
+                "$project":
+                {
+                    "_id": 0,
+                    "itemId": "$items.itemId",
+                    "itemName": "$items.name",
+                    "gst": 0,
+                    "price": "$items.price",
+                    "closeCategory": 1
+                }
+            }
+        ])
+        data = list(data)
+        if any(d["closeCategory"] for d in data):
+            return jsonify(
+                {"message":
+                 "One or more items are ordered from a closed category"}), 400
+        subTotal = 0
+        items_arr = []
+        for d in data:
+            qty = itemsDict.get(d["itemId"], 1)
+            subTotal += float(d["price"])*int(qty)
+            items_arr.append(
+                {"itemId": d["itemId"], "itemName": d["itemName"],
+                 "price": d["price"], "qty": qty})
+        orderFields = {
+            "orderId": generate_custom_id(),
+            "timestamp": int(round(time.time() * 1000)),
+            "orderStatus": "placed",
+            "subTotal": subTotal,
+            "manualBilling": False,
+            "total": round(subTotal, 2),
+            "status": "ncnf"
+        }
+        createOrder.update(orderFields)
+        createOrder["items"] = items_arr
+        mongo.db.shopping_orders.insert_one(createOrder)
+        mongo.db.shopping_cart.delete_one({"email": email})
+        createOrder.pop("_id", None)
+        post = {
+        "key":
+        global_key,
+        "amount":
+        str(orderFields['total']),
+        "phone":
+        phone,
+        "productinfo":
+        ("Spices").rstrip(),
+        "surl":
+        "http://15.207.147.88:5000/franchisee/payuSuccessWizard",
+        "furl":
+        "http://15.207.147.88:5000/franchisee/payuFailureWizard",
+        "firstname":
+        customerName,
+        "email":
+        email,
+        "service_provider":
+        "payu_paisa"
+    }
+    # print(post)
+    res = requests.post(payment_url + '/api/payment/checkout', json=post)
+    res = res.json()
+    # Create retainer invoice
+    customer_id = mongo.db.zoho_customer.find_one({'email': email})
+    if customer_id:
+        invoice_id = create_zoho_retainer_invoice(
+            customer_id['zohoId'], post['productinfo'], float(post['amount']))
+        mongo.db.retainer_invoices.insert_one(
+            {
+                "email": email,
+                "invoice_id": invoice_id,
+                "customer_id": customer_id['zohoId'],
+                "amount": float(post['amount']),
+                "timestamp": int(round(time.time() * 1000)),
+            })
+    # print(res)
+    hash_uid = mongo.db.hash_counter.find_one({"id": 1})['hash_uid']
+    res['payment_uid'] = hash_uid
+    mongo.db.hash_map_wizard.insert_one({
+        "hash_uid":
+        hash_uid,
+        "initiated_date":
+        int(round(time.time() * 1000)),
+        "hash":
+        res['hash'],
+        "email":
+        email,
+        "amount":
+        orderFields['total'],
+        "status":
+        0,
+        "transaction_id":
+        res['txnid'],
+        "bank_ref_num":
+        "",
+        "mihpayid":
+        ""
+    }),
+    mongo.db.hash_counter_wizard.update_one({"id": 1},
+                                     {"$set": {
+                                         "hash_uid": hash_uid + 1
+                                     }})
+    res['orderDetails'] = createOrder
+    return res
+        
 
 if __name__ == "__main__":
     print("starting...")
+    refresh_zoho_access_token(force=True)
     app.run(host=cfg.IOTFlask['HOST'],
             port=cfg.IOTFlask['PORT'],
             threaded=cfg.IOTFlask['THREADED'],
