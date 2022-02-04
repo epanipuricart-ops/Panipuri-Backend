@@ -1,7 +1,9 @@
+from operator import ge
 from flask import (Flask, session, send_from_directory, send_file,
                    render_template)
 from flask import request, redirect, url_for
 from flask_pymongo import PyMongo
+from pymongo import ReturnDocument
 from flask import jsonify
 from flask_cors import CORS, cross_origin
 from flask_apscheduler import APScheduler
@@ -327,10 +329,10 @@ def create_zoho_retainer_invoice(customer_id, item_name, price):
         }).json()
     if response.get("code") == 0:
         print(response)
-        return response.get("retainerinvoice").get("retainerinvoice_id")
+        return response.get("retainerinvoice")
 
 
-def create_zoho_customer_payments(customer_id):
+def create_zoho_customer_payments(customer_id, reference_number):
     retainerinvoice = mongo.db.retainer_invoices.find_one(
         {"customer_id": customer_id}, sort=[('timestamp', -1)])
     response = requests.post(
@@ -346,7 +348,9 @@ def create_zoho_customer_payments(customer_id):
             "date": date.today().strftime("%Y-%m-%d"),
             "amount": retainerinvoice.get("amount"),
             "retainerinvoice_id": retainerinvoice.get("invoice_id"),
-            "payment_mode": "Cash"
+            # "retainerinvoice_number": retainerinvoice.get("invoice_number"),
+            "reference_number": reference_number,
+            "payment_mode": "banktransfer"
         }).json()
     if response.get("code") == 0:
         return response.get("payment").get("payment_id")
@@ -1084,12 +1088,15 @@ def payNow():
     print(customer_id)
     if customer_id:
         print("reached")
-        invoice_id = create_zoho_retainer_invoice(
+        invoice = create_zoho_retainer_invoice(
             customer_id['zohoId'], post['productinfo'], float(post['amount']))
+        invoice_id = invoice.get('retainerinvoice_id')
+        invoice_number = invoice.get('retainerinvoice_number')
         mongo.db.retainer_invoices.insert_one(
             {
                 "email": email,
                 "invoice_id": invoice_id,
+                "invoice_number": invoice_number,
                 "customer_id": customer_id['zohoId'],
                 "amount": float(post['amount']),
                 "timestamp": int(round(time.time() * 1000)),
@@ -1155,7 +1162,7 @@ def payuSuccess():
     customer_id = mongo.db.zoho_customer.find_one(
         {'email': txn_data['email']})
     if customer_id:
-        create_zoho_customer_payments(customer_id['zohoId'])
+        create_zoho_customer_payments(customer_id['zohoId'], bank_ref_num)
     # currentRoles = mongo.db.clients.find_one(
     #     {"email": txn_data['email']}, {"roles": 1})
     # currentRoles = currentRoles.get("roles", [])
@@ -1347,7 +1354,8 @@ def createDefaultMenu():
         for item in category["items"]:
             item.update({"itemId": generate_custom_id()})
     mongo.db.menu.update_one({"cartId": cartId},
-                             {"$set": default_menu})
+                             {"$set": default_menu}, upsert=True)
+    return jsonify({"message": "Menu created successfully"})
 
 
 @app.route('/franchisee/uploadDocuments', methods=['POST'])
@@ -1454,7 +1462,7 @@ def uploadDocuments():
             for item in category["items"]:
                 item.update({"itemId": generate_custom_id()})
         mongo.db.menu.update_one({"cartId": device_data["device_id"]},
-                                 {"$set": default_menu})
+                                 {"$set": default_menu}, upsert=True)
 
         # trigger iot register api
         # modelType is hardcoded to 1
@@ -1469,7 +1477,10 @@ def uploadDocuments():
             "address": ", ".join([device_data[key]
                                   for key in ["location", "town", "state"]])
         }
-        requests.post(iot_api_url+"/wizard/registerDevice", json=iot_data)
+        print(iot_data)
+        response = requests.post(
+            iot_api_url+"/wizard/registerDevice", json=iot_data)
+        print("Register Device Response: ", response.text)
 
         # zoho sales order
         model_uid = order_data.get("model_uid", 1)
@@ -2733,7 +2744,78 @@ def getAboutVideo():
     return send_from_directory('public/video', file)
 
 
+@app.route('/franchisee/createStockUnit', methods=['POST'])
+@cross_origin()
+def createStockUnit():
+    data = request.json
+    record = {
+        "name": data["name"],
+        "description": data.get("description", ""),
+        "price": data["price"],
+        "stockId": generate_custom_id(),
+        "quantity": int(data["quantity"])
+    }
+    mongo.db.stock.insert_one(record)
+    return jsonify({"message": "SUCCESS"})
 
+
+@app.route('/franchisee/getStockUnit', methods=['GET'])
+@cross_origin()
+def getStockUnit():
+    stockId = request.args.get('stockId')
+    if stockId:
+        data = mongo.db.stock.find_one({"stockId": stockId}, {"_id": 0})
+        return jsonify(data)
+    data = mongo.db.stock.find({}, {"_id": 0})
+    return jsonify(list(data))
+
+
+@app.route('/franchisee/updateStockUnit', methods=['PUT'])
+@cross_origin()
+def updateStockUnit():
+    data = request.json
+    stockId = data.get('stockId')
+    if stockId:
+        valid_fields = ["name", "description", "price"]
+        updateItem = {field: value for field,
+                      value in data.items() if field in valid_fields}
+        mongo.db.stock.update_one({"stockId": stockId}, {'$set': updateItem})
+        return jsonify({"message": "SUCCESS"})
+    return jsonify({"message": "Invalid Stock Id"}), 403
+
+
+@app.route('/franchisee/increaseStockUnit', methods=['POST'])
+@cross_origin()
+def increaseStockUnit():
+    data = request.json
+    stockId = data.get('stockId')
+    quantity = int(data.get('quantity'))
+    if stockId and quantity > 0:
+        data = mongo.db.stock.find_one_and_update(
+            {"stockId": stockId},
+            {'$inc': {"quantity": quantity}},
+            {"_id": 0},
+            return_document=ReturnDocument.AFTER)
+        if data:
+            return jsonify(data)
+    return jsonify({"message": "Invalid Stock Id"}), 403
+
+
+@app.route('/franchisee/decreaseStockUnit', methods=['POST'])
+@cross_origin()
+def decreaseStockUnit():
+    data = request.json
+    stockId = data.get('stockId')
+    quantity = int(data.get('quantity'))
+    if stockId and quantity > 0:
+        data = mongo.db.stock.find_one_and_update(
+            {"stockId": stockId},
+            {'$inc': {"quantity": -quantity}},
+            {"_id": 0},
+            return_document=ReturnDocument.AFTER)
+        if data:
+            return jsonify(data)
+    return jsonify({"message": "Invalid Stock Id"}), 403
 
 # @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
 # def zoho_crm_create():

@@ -103,6 +103,34 @@ def wizardLogin():
         return jsonify({"message": "Unauthorized Access"}), 403
 
 
+@app.route('/wizard/login', methods=['POST'])
+@cross_origin()
+def wizardLogin():
+    email = request.json['email']
+    data = list(mongo.db.device_ids.find({"email": email}))
+    alias_data = list(mongo.db.alias_data.find({"alias_email": email}))
+    if len(data) != 0:
+        out = []
+        for ele in data:
+            out.append(ele['device_id'])
+        try:
+            name = mongo.db.clients.find_one({"email": email})['firstName']
+            res = {'email': email, 'name': name,
+                   'devices': out, 'role': 'franchisee'}
+            return jsonify(res)
+        except:
+            return jsonify({"message": "Some error occurred"}), 500
+    elif len(alias_data) != 0:
+        out = []
+        for ele in alias_data:
+            out.append(ele['device_id'])
+        data = {'email': email,
+                'name': alias_data[0]['alias_name'], 'devices': out, 'role': 'alias'}
+        return jsonify(data)
+    else:
+        return jsonify({"message": "Unauthorized Access"}), 403
+
+
 @app.route('/upload', methods=['GET', 'POST'])
 @cross_origin()
 def upload():

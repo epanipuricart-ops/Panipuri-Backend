@@ -24,7 +24,7 @@ WherebyConfig = {
 }
 
 ZohoConfig = {
-    "refresh_token": "1000.fa1bac339954cbd1fe59a51b0237872b.47b52b1d3039bed2c657f2f6669a24da",
+    "refresh_token": "1000.b705a2f90c6a7badb070831561fe6729.6e5e655a279b83ff193ffbd14f066d66",
     "client_id": "1000.TM9579QXAQRONAPUYM8I9V3JR1AIZY",
     "client_secret": "3e4811b9ced7df56e36e1e5090c49b012c03092fb9",
     "organization_id": "60003188756"
@@ -128,3 +128,5 @@ estimate_mail_body = """
 <div>Harish Neotia </div>Water N Spices Foodsz Pvt Ltd
 <div>www.epanipuricart.com</div>
 """
+
+ZOHO_OAUTH_SCOPES="ZohoBooks.contacts.ALL,ZohoBooks.estimates.ALL, ZohoBooks.salesorders.ALL, ZohoCRM.modules.contacts.ALL,ZohoBooks.invoices.ALL,ZohoBooks.customerpayments.ALL"
