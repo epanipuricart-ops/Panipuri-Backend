@@ -588,7 +588,7 @@ def login(path):
                              })
         data = mongo.db.clients.find_one({'firebase_id': decoded['user_id']})
         if data:
-            if 'super' in data['roles'] or 'admin' in data['roles']:
+            if 'super' in data['roles'] or 'admin' in data['roles'] or 'technician' in data['roles']:
                 return jsonify({
                     'name': data['name'],
                     'email': data['email'],
