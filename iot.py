@@ -1103,6 +1103,7 @@ def payNowWizard():
             "transaction_id": res["txnid"],
             "bank_ref_num": "",
             "mihpayid": "",
+            "orderId": createOrder["orderId"],
         }
     ),
     mongo.db.hash_counter_wizard.update_one(
@@ -1122,6 +1123,62 @@ def renderPaymentWizard(orderId):
     if not order:
         return jsonify({"message": "No such order found"}), 400
     return render_template("payment.html", **order["payu_response"])
+
+
+@app.route("/wizard/checkPaymentStatus", methods=["GET"])
+@cross_origin()
+def checkPaymentStatus():
+    orderId = request.args.get("orderId")
+    if orderId:
+        order = mongo.db.shopping_orders.find_one(
+            {"orderId": orderId},
+            {"_id": 0, "payu_response": 0})
+        if not order:
+            return jsonify({"message": "No such order found"}), 400
+        return jsonify(order)
+    return jsonify({"message": "No orderId found"}), 400
+
+
+@app.route('/wizard/payuSuccess', methods=['POST'])
+@cross_origin()
+def payuSuccess():
+    # date = int(round(time.time() * 1000))
+    bank_ref_num = request.form['bank_ref_num']
+    mihpayid = request.form['mihpayid']
+    transaction_id = request.form['txnid']
+    txn_data = mongo.db.hash_map_wizard.find_one(
+        {"transaction_id": transaction_id})
+    mongo.db.hash_map_wizard.update_one({"transaction_id": transaction_id}, {
+        "$set": {
+            "status": 1,
+            "bank_ref_num": bank_ref_num,
+            "mihpayid": mihpayid
+        }
+    })
+    mongo.db.shopping_orders.update_one({"orderId": txn_data["orderId"]}, {
+        "$set": {
+            "status": "cnf",
+        }
+    })
+    mongo.db.shopping_cart.delete_one({"email": txn_data["email"]})
+    return render_template('index.html')
+
+
+@app.route('/wizard/payuFailure', methods=['POST'])
+@cross_origin()
+def payuFailure():
+    transaction_id = request.form['txnid']
+    txn_data = mongo.db.hash_map_wizard.find_one_and_update(
+        {"transaction_id": transaction_id},
+        {"$set": {
+            "status": -1
+        }})
+    mongo.db.shopping_orders.update_one({"orderId": txn_data["orderId"]}, {
+        "$set": {
+            "status": "fail",
+        }
+    })
+    return render_template('fail.html')
 
 
 if __name__ == "__main__":
