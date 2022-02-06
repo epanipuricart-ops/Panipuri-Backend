@@ -1009,10 +1009,42 @@ def getCosting():
             d['modelType'] = ele['modelType']
             d['extension'] = ele['extension']
             d['model_image'] = ele['model_image']
+            d['appPrice'] = ele['appPrice']
+            d['advance'] = ele['advance']
             if 'subscriptionPrice' in ele:
                 d['subscriptionPrice'] = ele['subscriptionPrice']
             arr.append(d)
         return jsonify({"items": arr})
+
+    except:
+        return jsonify({"message": "Some Error Occurred"}), 500
+
+
+@app.route('/franchisee/getModelById', methods=['GET'])
+@cross_origin()
+@verify_token
+def getModelById():
+    try:
+        uid = int(request.args.get('uid'))
+        data = mongo.db.costing.find_one({"uid": uid}, {"_id": 0})
+        return jsonify(data)
+
+    except:
+        return jsonify({"message": "Some Error Occurred"}), 500
+
+
+@app.route('/franchisee/getAppPrice', methods=['GET'])
+@cross_origin()
+@verify_token
+def getAppPrice():
+    try:
+        modelType = int(request.args.get('modelType'))
+        modelName = request.args.get('modelName')
+        extension = request.args.get('extension')
+        purchaseType = request.args.get('purchaseType')
+        data = mongo.db.costing.find_one(
+            {"modelType": modelType, "name": modelName, "extension": extension}, {"_id": 0})
+        return jsonify({"appPrice": data['appPrice']})
 
     except:
         return jsonify({"message": "Some Error Occurred"}), 500
@@ -1063,7 +1095,7 @@ def payNow():
         "key":
         global_key,
         "amount":
-        str(0.5 * model_data['price']),
+        str( model_data['advance']),
         "phone":
         phone,
         "productinfo":
@@ -1116,7 +1148,7 @@ def payNow():
         "model_uid":
         model_uid,
         "amount":
-        0.5 * model_data['price'],
+         model_data['advance'],
         "status":
         0,
         "transaction_id":
