@@ -1114,7 +1114,7 @@ def payNowWizard():
     return jsonify({"orderId": createOrder["orderId"]}), 200
 
 
-@app.route("/wizard/renderPayment/<orderId>", methods=["POST"])
+@app.route("/wizard/renderPayment/<orderId>", methods=["GET"])
 @cross_origin()
 # @verify_token
 def renderPaymentWizard(orderId):
