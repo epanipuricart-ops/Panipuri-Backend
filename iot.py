@@ -1065,8 +1065,8 @@ def payNowWizard():
             "amount": str(orderFields["total"]),
             "phone": phone,
             "productinfo": ("Spices").rstrip(),
-            "surl": "http://15.207.147.88:5000/franchisee/payuSuccessWizard",
-            "furl": "http://15.207.147.88:5000/franchisee/payuFailureWizard",
+            "surl": "http://15.207.147.88:5002/wizard/payuSuccessWizard",
+            "furl": "http://15.207.147.88:5002/wizard/payuFailureWizard",
             "firstname": customerName,
             "email": email,
             "service_provider": "payu_paisa",
@@ -1139,9 +1139,9 @@ def checkPaymentStatus():
     return jsonify({"message": "No orderId found"}), 400
 
 
-@app.route('/wizard/payuSuccess', methods=['POST'])
+@app.route('/wizard/payuSuccessWizard', methods=['POST'])
 @cross_origin()
-def payuSuccess():
+def payuSuccessWizard():
     # date = int(round(time.time() * 1000))
     bank_ref_num = request.form['bank_ref_num']
     mihpayid = request.form['mihpayid']
@@ -1164,9 +1164,9 @@ def payuSuccess():
     return render_template('index.html')
 
 
-@app.route('/wizard/payuFailure', methods=['POST'])
+@app.route('/wizard/payuFailureWizard', methods=['POST'])
 @cross_origin()
-def payuFailure():
+def payuFailureWizard():
     transaction_id = request.form['txnid']
     txn_data = mongo.db.hash_map_wizard.find_one_and_update(
         {"transaction_id": transaction_id},
