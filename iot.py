@@ -188,9 +188,17 @@ def registerDevice():
         devices.insert_one(post)
         p = {"uid": uid, "data": []}
         mongo.db.stats.insert_one(p)
-        q = {"uid": uid, "data": []}
-        mongo.db.levels.insert_one(q)
         arr = create_dict(type_of_device)
+        timestamp = int(round(time.time() * 1000))
+        q = {
+            "uid": uid,
+            "data": [{
+                "name": noz["name"],
+                "low":0,
+                "date": timestamp
+            } for noz in arr]
+        }
+        mongo.db.levels.insert_one(q)
         for ele in arr:
             ele["count"] = [
                 {"date": datetime.now().strftime("%m-%d-%Y"), "dailyCount": 0}
