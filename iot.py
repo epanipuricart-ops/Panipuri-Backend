@@ -23,7 +23,8 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 
-global_key = "ueQ4sZ"
+#global_key = "ueQ4sZ"
+global_key = "JPM7Fg"
 payment_url = "http://15.207.147.88:8083/"
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
@@ -1078,6 +1079,7 @@ def payNowWizard():
             "firstname": customerName,
             "email": email,
             "service_provider": "payu_paisa",
+            "txType": True
         }
     # print(post)
     res = requests.post(payment_url + "/api/payment/checkout", json=post)
