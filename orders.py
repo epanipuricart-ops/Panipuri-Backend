@@ -72,9 +72,64 @@ def generate_order_id():
     return data["value"]
 
 
+def send_notification(user_tokens, notification):
+    if not user_tokens:
+        return
+
+    url = "https://fcm.googleapis.com/fcm/send"
+
+    headers = {'Authorization': f'key={cfg.FIREBASE_KEY}'}
+
+    data = {
+        "registration_ids": user_tokens,
+        "collapse_key": "New Message",
+        "notification": notification,
+        "data": {
+            "body": "alert",
+            "title": "alert"
+        }
+    }
+
+    resp = requests.post(url, headers=headers, json=data)
+
+    return resp.status_code
+
+
+def notify_franchisee_on_new_order(device_id):
+    tokens = mongo.db.franchisee_tokens.find(
+        {
+            "device_id": device_id,
+            "isActive": True
+        },
+        {"_id": 0}
+    )
+    fcm_tokens = [token["fcm_token"] for token in tokens]
+    notification = {
+        "body": "A new Order has been placed",
+        "title": "Order Placed"
+    }
+    return send_notification(fcm_tokens, notification)
+
+
+def notify_customer_on_status_change(email):
+    tokens = mongo.db.customer_tokens.find(
+        {
+            "email": email,
+            "isActive": True
+        },
+        {"_id": 0}
+    )
+    fcm_tokens = [token["fcm_token"] for token in tokens]
+    notification = {
+        "body": "Your order status has been updated",
+        "title": "Order Status Updated"
+    }
+    return send_notification(fcm_tokens, notification)
+
+
 @app.route('/orderOnline/getMenu', methods=['GET'])
 @cross_origin()
-@verify_token
+# @verify_token
 def getMenu():
     cartId = request.args.get("cartId")
     if not cartId:
@@ -305,7 +360,7 @@ def verifyOTP():
 
 @app.route('/orderOnline/getAllLocations', methods=['GET'])
 @cross_origin()
-@verify_token
+# @verify_token
 def getAllLocations():
     state = request.args.get("state")
     town = request.args.get("town")
@@ -319,7 +374,7 @@ def getAllLocations():
 
 @app.route('/orderOnline/getCitiesByState', methods=['GET'])
 @cross_origin()
-@verify_token
+# @verify_token
 def getCitiesByState():
     state = request.args.get("state")
     if state:
@@ -527,6 +582,7 @@ def placeOrder():
             upsert=True)
         mongo.db.order_cart.delete_one({"email": email})
         createOrder.pop("_id", None)
+        notify_franchisee_on_new_order(createOrder["cartId"])
         socketio.emit("receiveOrder", createOrder,
                       json=True, room=extraData["sid"])
         return jsonify(createOrder)
@@ -561,7 +617,7 @@ def getStatistics():
     if startms and endms:
         startms = datetime.fromtimestamp(float(startms)/1000.0)
         endms = datetime.fromtimestamp(float(endms)/1000.0)
-        query.update({"timestamp": {"$gt":  startms, "$lt": endms}})
+        query["timestamp"] = {"$gt":  startms, "$lt": endms}
     data = mongo.db.daily_statistics.find(
         query,
         {"_id": 0, "cartId": 0}).sort("timestamp", -1)
@@ -789,7 +845,7 @@ def updateOrderStatus():
     status = data.get("status")
     order_data = mongo.db.online_orders.find_one(
         {"orderId": orderId}, {"_id": 0})
-
+    notify_customer_on_status_change(order_data['customerEmail'])
     if orderId and status:
         if status == 'pending':
             deliveryCharge = float(data.get('deliveryCharge'))
@@ -813,7 +869,7 @@ def updateOrderStatus():
                 {"orderId": orderId}, {"_id": 0})
             socketio.emit("receiveEditedOrder", order_data,
                           json=True, room=sid_list)
-        elif status == 'confirmed' or status == 'canceled':
+        elif status in ['confirmed', 'canceled']:
             mongo.db.online_orders.update_one(
                 {"orderId": orderId},
                 {"$set": {
@@ -855,7 +911,7 @@ def getOrderByTypeAndStatus():
         return jsonify({"message": "No status arguments sent"}), 400
     query = {"orderStatus": status, "cartId": cartId}
     if _type:
-        query.update({"orderType": _type})
+        query["orderType"] = _type
     orders = mongo.db.online_orders.find(
         query, {"_id": 0}).sort("timestamp", -1)
     return jsonify({"orders": list(orders)})
@@ -873,7 +929,8 @@ def pendingOrders():
                          })
     email = decoded['email']
     pending_data = mongo.db.online_orders.find(
-        {"customerEmail": email, "orderStatus": "pending"}, {"_id": 0}).sort("timestamp", -1)
+        {"customerEmail": email, "orderStatus": "pending"},
+        {"_id": 0}).sort("timestamp", -1)
     if pending_data:
         return jsonify({"orders": list(pending_data)})
     else:
@@ -978,6 +1035,56 @@ def generateInvoice():
             print(e)
         return send_from_directory(INVOICE_PDF_FOLDER, orderId+".pdf")
     return jsonify({"message": "Invalid ID"})
+
+
+@app.route('/orderOnline/getProfile', methods=['GET'])
+@cross_origin()
+@verify_token
+def getProfile():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    user = mongo.db.clients.find_one(
+        {"email": email},
+        {
+            "_id": 0,
+            "firstName": 1,
+            "lastName": 1,
+            "mobile": 1,
+            "email": 1,
+        })
+    address = mongo.db.address_book.find_one({"email": email})
+    user["address"] = address.pop("address") if address else []
+    return jsonify(user)
+
+
+@app.route('/orderOnline/updateProfile', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateProfile():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    data = request.get_json()
+    fields = ["firstName", "lastName", "mobile"]
+    new_data = {field: data[field] for field in fields if field in data}
+    if not data or not new_data:
+        return jsonify({"message": "No Data Sent"})
+    mongo.db.clients.update_one(
+        {"email": email},
+        {
+            "$set": new_data
+        }
+    )
+    return jsonify({"message": "Profile Updated"})
 
 
 @app.route('/orderOnline/getAddress', methods=['GET'])
@@ -1161,7 +1268,8 @@ def allOrderStatusEvent(data):
                              })['email']
     if clientEmail:
         orders = mongo.db.online_orders.find(
-            {"customerEmail": clientEmail}, {"_id": 0})
+            {"customerEmail": clientEmail}, {"_id": 0}
+        ).sort("timestamp", -1)
         emit("allOrderStatus", {"orders": list(orders)}, json=True)
         return {}
     emit("allOrderStatus", {"message": "No clientEmail sent"})

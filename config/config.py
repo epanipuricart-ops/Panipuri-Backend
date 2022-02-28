@@ -23,6 +23,8 @@ WherebyConfig = {
     "API_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmFwcGVhci5pbiIsImF1ZCI6Imh0dHBzOi8vYXBpLmFwcGVhci5pbi92MSIsImV4cCI6OTAwNzE5OTI1NDc0MDk5MSwiaWF0IjoxNjMwMTMwNzE0LCJvcmdhbml6YXRpb25JZCI6MTI2MjkyLCJqdGkiOiI3NWJmODYyMS1iZThmLTQwZWUtYjk1NS02NmM5M2Q2MjY4OWUifQ.fpDBFa8l-BfKrOUQ56L65KPoWrKT2V9So-vs9uJCLB4"
 }
 
+FIREBASE_KEY = "AAAAy-ge0a8:APA91bEFsUxaUNvX21r2zqvVRjgQ_hVxRe5W6mucLA87_kYQ-3sdM6sV8ug61Fqecd948yR72Xz8k66us2aYXVIm0SUdmFSUknFeQEwhmiBvxyZSIxBYaDYh2Ym65vsniMdSVSJSkwYU"
+
 ZohoConfig = {
     "refresh_token": "1000.b705a2f90c6a7badb070831561fe6729.6e5e655a279b83ff193ffbd14f066d66",
     "client_id": "1000.TM9579QXAQRONAPUYM8I9V3JR1AIZY",
@@ -129,4 +131,4 @@ estimate_mail_body = """
 <div>www.epanipuricart.com</div>
 """
 
-ZOHO_OAUTH_SCOPES="ZohoBooks.contacts.ALL,ZohoBooks.estimates.ALL, ZohoBooks.salesorders.ALL, ZohoCRM.modules.contacts.ALL,ZohoBooks.invoices.ALL,ZohoBooks.customerpayments.ALL"
+ZOHO_OAUTH_SCOPES = "ZohoBooks.contacts.ALL,ZohoBooks.estimates.ALL, ZohoBooks.salesorders.ALL, ZohoCRM.modules.contacts.ALL,ZohoBooks.invoices.ALL,ZohoBooks.customerpayments.ALL"

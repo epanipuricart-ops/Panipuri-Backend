@@ -1,3 +1,4 @@
+from cgi import test
 from flask import Flask, request, jsonify, render_template
 from flask_pymongo import PyMongo
 from flask_cors import CORS, cross_origin
@@ -108,6 +109,36 @@ def wizardLogin():
         return jsonify(data)
     else:
         return jsonify({"message": "Unauthorized Access"}), 403
+
+
+@app.route("/wizard/saveFCMToken", methods=["POST"])
+@cross_origin()
+def saveFCMToken():
+    device_id = request.json["device_id"]
+    fcm_token = request.json["fcm_token"]
+    mongo.db.franchisee_tokens.update_one(
+        {
+            "device_id": device_id,
+            "fcm_token": fcm_token
+        },
+        {"$set": {"isActive": True}},
+        upsert=True
+    )
+    return jsonify({"message": "Token updated successfully"})
+
+
+@app.route("/wizard/logout", methods=["POST"])
+@cross_origin()
+def logout():
+    device_id = request.json["device_id"]
+    fcm_token = request.json["fcm_token"]
+    mongo.db.franchisee_tokens.delete_one(
+        {
+            "device_id": device_id,
+            "fcm_token": fcm_token
+        }
+    )
+    return jsonify({"message": "Token deleted successfully"})
 
 
 @app.route("/upload", methods=["GET", "POST"])
@@ -1081,6 +1112,20 @@ def payNowWizard():
             "service_provider": "payu_paisa",
             "txType": True
         }
+    # update statistics
+    for item in items_arr:
+        mongo.db.customer_order_stats.update_one(
+            {"email": email, "itemId": item["itemId"]},
+            {"$inc": {"totalOrders": item["qty"]}},
+            upsert=True,
+        )
+        mongo.db.item_statistics.update_one({
+            "itemId": item["itemId"],
+            "timestamp": datetime.combine(date.today(), datetime.min.time())
+        },
+            {
+                "$inc": {"dailyCount": item["qty"]}
+        }, upsert=True)
     # print(post)
     res = requests.post(payment_url + "/api/payment/checkout", json=post)
     res = res.json()
@@ -1125,11 +1170,74 @@ def payNowWizard():
     return jsonify({"orderId": createOrder["orderId"]}), 200
 
 
+@app.route('/wizard/getUserOrderStatistics', methods=['GET'])
+@cross_origin()
+def get_user_order_statistics():
+    email = request.args.get('email')
+    if not email:
+        return jsonify({"message": "Email not found"}), 400
+    data = mongo.db.customer_order_stats.find({"email": email}, {"_id": 0})
+    data = list(data) if data else []
+    return jsonify(data), 200
+
+
+@app.route('/wizard/getItemStatistics', methods=['GET'])
+@cross_origin()
+def getItemStatistics():
+    itemId = request.args.get("itemId")
+    startms = request.args.get("startms")
+    endms = request.args.get("endms")
+    if not itemId:
+        return jsonify({"message": "Missing itemId"}), 400
+    query = {"itemId": itemId}
+    if startms and endms:
+        startms = datetime.fromtimestamp(float(startms)/1000.0)
+        endms = datetime.fromtimestamp(float(endms)/1000.0)
+        query["timestamp"] = {"$gt":  startms, "$lt": endms}
+    data = mongo.db.item_statistics.find(
+        query,
+        {"_id": 0, "itemId": 0}).sort("timestamp", -1)
+    newData = []
+    for rec in data:
+        rec["timestamp"] = rec["timestamp"].strftime("%d-%m-%Y")
+        newData.append(rec)
+    return jsonify({"stats": newData})
+
+
+@app.route('/wizard/generateItemStatistics', methods=['GET'])
+@cross_origin()
+def generateItemStatistics():
+    token = request.headers["Authorization"]
+    decoded = jwt.decode(
+        token, options={"verify_signature": False, "verify_aud": False}
+    )
+    email = decoded["email"]
+    startms = int(request.args.get("startms"))
+    endms = int(request.args.get("endms"))
+    query = {"customerEmail": email}
+    if startms and endms:
+        query["timestamp"] = {"$gt":  startms, "$lt": endms}
+    items = mongo.db.shopping_orders.find(
+        query, {"_id": 0, "items": 1})
+    sales = {}
+    for itemrow in items:
+        for item in itemrow["items"]:
+            name = item["itemName"]
+            sales[name] = sales.get(name, 0)+item["qty"]
+    if sales:
+        max_sales = max(sales, key=sales.get)
+        return jsonify({"sales": sales, "max_sales_item": max_sales})
+    return jsonify({"sales": {}, "max_sales_item": ""})
+
+
 @app.route("/wizard/renderPayment/<orderId>", methods=["GET"])
 @cross_origin()
 # @verify_token
 def renderPaymentWizard(orderId):
+    test_mode = request.args.get("test_mode")
     order = mongo.db.shopping_orders.find_one({"orderId": orderId})
+    if test_mode:
+        order["payu_response"]["action"] = "https://test.payu.in/_payment"
     if not order:
         return jsonify({"message": "No such order found"}), 400
     return render_template("payment.html", **order["payu_response"])
@@ -1142,7 +1250,7 @@ def checkPaymentStatus():
     if orderId:
         order = mongo.db.shopping_orders.find_one(
             {"orderId": orderId},
-            {"_id": 0, "payu_response": 0})
+            {"_id": 0, "status": 1, "orderId": 1})
         if not order:
             return jsonify({"message": "No such order found"}), 400
         return jsonify(order)

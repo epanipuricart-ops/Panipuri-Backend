@@ -606,6 +606,50 @@ def login(path):
             return jsonify({"message": "User not registered"}), 401
 
 
+@app.route("/franchisee/saveFCMToken", methods=["POST"])
+@cross_origin()
+@verify_token
+def saveFCMToken():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    fcm_token = request.json["fcm_token"]
+    mongo.db.customer_tokens.update_one(
+        {
+            "email": email,
+            "fcm_token": fcm_token
+        },
+        {"$set": {"isActive": True}},
+        upsert=True
+    )
+    return jsonify({"message": "Token updated successfully"})
+
+
+@app.route("/franchisee/logout", methods=["POST"])
+@cross_origin()
+@verify_token
+def logout():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    fcm_token = request.json["fcm_token"]
+    mongo.db.customer_tokens.delete_one(
+        {
+            "email": email,
+            "fcm_token": fcm_token
+        }
+    )
+    return jsonify({"message": "Token deleted successfully"})
+
+
 @app.route('/franchisee/getProfile', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -1095,7 +1139,7 @@ def payNow():
         "key":
         global_key,
         "amount":
-        str( model_data['advance']),
+        str(model_data['advance']),
         "phone":
         phone,
         "productinfo":
@@ -1148,7 +1192,7 @@ def payNow():
         "model_uid":
         model_uid,
         "amount":
-         model_data['advance'],
+        model_data['advance'],
         "status":
         0,
         "transaction_id":
@@ -2053,7 +2097,7 @@ def deleteAliasData():
 
 @app.route('/franchisee/getMenu', methods=['GET'])
 @cross_origin()
-@verify_token
+# @verify_token
 def getMenu():
     cartId = request.args.get("cartId")
     if not cartId:
@@ -2134,7 +2178,7 @@ def updateMenu(field):
 
 @app.route('/franchisee/getAllLocations', methods=['GET'])
 @cross_origin()
-@verify_token
+# @verify_token
 def getAllLocations():
     state = request.args.get("state")
     town = request.args.get("town")
@@ -2149,7 +2193,7 @@ def getAllLocations():
 
 @app.route('/franchisee/getCitiesByState', methods=['GET'])
 @cross_origin()
-@verify_token
+# @verify_token
 def getCitiesByState():
     state = request.args.get("state")
     if state:
@@ -2158,6 +2202,20 @@ def getCitiesByState():
             {"_id": 0, "town": 1})
         return jsonify({"cities": list({x["town"] for x in locations})})
     return jsonify({"message": "No State provided"}), 400
+
+
+@app.route('/franchisee/getOperativeStates', methods=['GET'])
+@cross_origin()
+# @verify_token
+def getOperativeStates():
+    locations = mongo.db.device_ids.find()
+    result = {}
+    for location in locations:
+        if location["state"] not in result:
+            result[location["state"]] = []
+        if location["town"] not in result[location["state"]]:
+            result[location["state"]].append(location["town"])
+    return jsonify(result)
 
 
 @app.route('/franchisee/getShoppingMenu', methods=['GET'])
@@ -2430,7 +2488,7 @@ def getShoppingCart():
     email = decoded['email']
     cart = mongo.db.shopping_cart.find_one({"email": email}, {"_id": 0})
     if not cart:
-        return jsonify({"message": "Cart Empty"}), 400
+        return jsonify({"message": "Cart Empty"})
     items_dict = {}
     for item in cart.get("items", []):
         items_dict[item] = items_dict.get(item, 0)+1
@@ -2614,7 +2672,7 @@ def updateProfile():
 
 @app.route('/franchisee/getCartProfile', methods=['GET'])
 @cross_origin()
-@verify_token
+# @verify_token
 def getCartProfile():
     cartId = request.args.get("cartId")
     if not cartId:
