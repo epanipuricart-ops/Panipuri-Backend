@@ -20,6 +20,7 @@ from pymongo.collection import ReturnDocument
 
 
 INVOICE_PDF_FOLDER = 'public/invoice_pdf'
+TRENDING_IMAGES_FOLDER = 'public/trending_images'
 
 app = Flask(__name__, static_url_path='')
 
@@ -1035,6 +1036,19 @@ def generateInvoice():
             print(e)
         return send_from_directory(INVOICE_PDF_FOLDER, orderId+".pdf")
     return jsonify({"message": "Invalid ID"})
+
+
+@app.route('/orderOnline/trending', methods=['GET'])
+@cross_origin()
+def trendingImages():
+    files = os.listdir(TRENDING_IMAGES_FOLDER)
+    return jsonify({"images": files})
+
+
+@app.route('/orderOnline/getImage/<path:path>', methods=['GET'])
+@cross_origin()
+def viewTrendingImages(path):
+    return send_from_directory(TRENDING_IMAGES_FOLDER, path)
 
 
 @app.route('/orderOnline/getProfile', methods=['GET'])
