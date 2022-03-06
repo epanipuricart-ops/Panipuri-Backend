@@ -1543,7 +1543,7 @@ def uploadDocuments():
         # trigger iot register api
         # modelType is hardcoded to 1
         costing_data = mongo.db.costing.find_one({"modelType": 1})
-        model_type = costing_data.get("extension").strip()[0]
+        model_type = costing_data.get("uid")
         name = client.get("firstName", "") + " " + client.get("lastName", "")
         iot_data = {
             "type": model_type,
