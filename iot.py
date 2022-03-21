@@ -23,8 +23,8 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 
-#global_key = "ueQ4sZ"
-global_key = "JPM7Fg"
+global_key = "ueQ4sZ"
+# global_key = "JPM7Fg"
 payment_url = "http://15.207.147.88:8083/"
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
@@ -1189,10 +1189,9 @@ def getItemStatistics():
     )
     email = decoded["email"]
     query = {"customerEmail": email}
-    startms = request.args.get("startms")
-    endms = request.args.get("endms")
-    if startms and endms:
-        query["timestamp"] = {"$gt":  int(startms), "$lt": int(endms)}
+    startms = int(request.args.get("startms", 0))
+    endms = int(request.args.get("endms", "9"*13))
+    query["timestamp"] = {"$gt": startms, "$lt": endms}
     items = mongo.db.shopping_orders.find(
         query,
         {"_id": 0, "items": 1, "total": 1, "timestamp": 1})
