@@ -11,7 +11,7 @@ import time
 import os
 import binascii
 from werkzeug.utils import secure_filename
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 import config.config as cfg
 from modules import *
 import firebase_admin
@@ -2878,6 +2878,13 @@ def updateStockUnit():
 @cross_origin()
 def increaseStockUnit():
     data = request.json
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
     stockId = data.get('stockId')
     quantity = int(data.get('quantity'))
     if stockId and quantity > 0:
@@ -2887,6 +2894,8 @@ def increaseStockUnit():
             {"_id": 0},
             return_document=ReturnDocument.AFTER)
         if data:
+            mongo.db.stock_logs.insert_one(
+                {"stockId": stockId, "quantity": quantity, "type": "inc", "timestamp": datetime.now(timezone.utc), "email": email})
             return jsonify(data)
     return jsonify({"message": "Invalid Stock Id"}), 403
 
@@ -2895,6 +2904,13 @@ def increaseStockUnit():
 @cross_origin()
 def decreaseStockUnit():
     data = request.json
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
     stockId = data.get('stockId')
     quantity = int(data.get('quantity'))
     if stockId and quantity > 0:
@@ -2904,6 +2920,8 @@ def decreaseStockUnit():
             {"_id": 0},
             return_document=ReturnDocument.AFTER)
         if data:
+            mongo.db.stock_logs.insert_one(
+                {"stockId": stockId, "quantity": quantity, "type": "dec", "timestamp": datetime.now(timezone.utc), "email": email})
             return jsonify(data)
     return jsonify({"message": "Invalid Stock Id"}), 403
 
