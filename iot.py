@@ -1,4 +1,3 @@
-from cgi import test
 from flask import Flask, request, jsonify, render_template
 from flask_pymongo import PyMongo
 from flask_cors import CORS, cross_origin
@@ -24,8 +23,8 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 
-#global_key = "ueQ4sZ"
-global_key = "JPM7Fg"
+global_key = "ueQ4sZ"
+# global_key = "JPM7Fg"
 payment_url = "http://15.207.147.88:8083/"
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
@@ -1184,24 +1183,41 @@ def get_user_order_statistics():
 @app.route('/wizard/getItemStatistics', methods=['GET'])
 @cross_origin()
 def getItemStatistics():
-    itemId = request.args.get("itemId")
-    startms = request.args.get("startms")
-    endms = request.args.get("endms")
-    if not itemId:
-        return jsonify({"message": "Missing itemId"}), 400
-    query = {"itemId": itemId}
-    if startms and endms:
-        startms = datetime.fromtimestamp(float(startms)/1000.0)
-        endms = datetime.fromtimestamp(float(endms)/1000.0)
-        query["timestamp"] = {"$gt":  startms, "$lt": endms}
-    data = mongo.db.item_statistics.find(
+    token = request.headers["Authorization"]
+    decoded = jwt.decode(
+        token, options={"verify_signature": False, "verify_aud": False}
+    )
+    email = decoded["email"]
+    query = {"customerEmail": email}
+    startms = int(request.args.get("startms", 0))
+    endms = int(request.args.get("endms", "9"*13))
+    query["timestamp"] = {"$gt": startms, "$lt": endms}
+    items = mongo.db.shopping_orders.find(
         query,
-        {"_id": 0, "itemId": 0}).sort("timestamp", -1)
-    newData = []
-    for rec in data:
-        rec["timestamp"] = rec["timestamp"].strftime("%d-%m-%Y")
-        newData.append(rec)
-    return jsonify({"stats": newData})
+        {"_id": 0, "items": 1, "total": 1, "timestamp": 1})
+    sales = {}
+    for itemrow in items:
+        date = datetime.fromtimestamp(
+            itemrow["timestamp"]/1000.0).strftime("%d-%m-%Y")
+        if not sales.get(date):
+            sales[date] = {"_total": 0}
+        sales[date]["_total"] += itemrow["total"]
+        for item in itemrow["items"]:
+            name = item["itemName"]
+            if not sales[date].get(name):
+                sales[date][name] = 0
+            sales[date][name] += item["qty"]
+    response = []
+    for key, values in sales.items():
+        items = []
+        for k, v in values.items():
+            if k == "_total":
+                continue
+            items.append({"name": k, "quantity": v})
+        response.append(
+            {"date": key, "items": items, "total": values["_total"]}
+        )
+    return jsonify({"stats": response})
 
 
 @app.route('/wizard/generateItemStatistics', methods=['GET'])

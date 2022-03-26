@@ -578,7 +578,9 @@ def placeOrder():
             "timestamp": datetime.combine(date.today(), datetime.min.time())
         },
             {
-                "$inc": {"dailyCount": 1}
+                "$inc": {
+                    "dailyCount": 1
+                }
         },
             upsert=True)
         mongo.db.order_cart.delete_one({"email": email})
@@ -610,23 +612,51 @@ def getSalesAmount():
 @verify_token
 def getStatistics():
     cartId = request.args.get("cartId")
-    startms = request.args.get("startms")
-    endms = request.args.get("endms")
+    startms = int(request.args.get("startms", 0))
+    endms = int(request.args.get("endms", "9"*13))
     if not cartId:
         return jsonify({"message": "Missing cartId"}), 400
-    query = {"cartId": cartId}
-    if startms and endms:
-        startms = datetime.fromtimestamp(float(startms)/1000.0)
-        endms = datetime.fromtimestamp(float(endms)/1000.0)
-        query["timestamp"] = {"$gt":  startms, "$lt": endms}
-    data = mongo.db.daily_statistics.find(
-        query,
-        {"_id": 0, "cartId": 0}).sort("timestamp", -1)
-    newData = []
-    for rec in data:
-        rec["timestamp"] = rec["timestamp"].strftime("%d-%m-%Y")
-        newData.append(rec)
-    return jsonify({"stats": newData})
+    # newData = []
+    # query = {"cartId": cartId}
+    # if startms and endms:
+    #     startms = datetime.fromtimestamp(float(startms)/1000.0)
+    #     endms = datetime.fromtimestamp(float(endms)/1000.0)
+    #     query["timestamp"] = {"$gt":  startms, "$lt": endms}
+    # data = mongo.db.daily_statistics.find(
+    #     query,
+    #     {"_id": 0, "cartId": 0}).sort("timestamp", -1)
+    # for rec in data:
+    #     rec["timestamp"] = rec["timestamp"].strftime("%d-%m-%Y")
+    #     newData.append(rec)
+
+    items = mongo.db.online_orders.find({
+        "cartId": cartId,
+        "timestamp": {"$gt":  startms, "$lt": endms}
+    },
+        {"_id": 0, "items": 1, "total": 1, "timestamp": 1})
+    sales = {}
+    for itemrow in items:
+        date = datetime.fromtimestamp(
+            itemrow["timestamp"]/1000.0).strftime("%d-%m-%Y")
+        if not sales.get(date):
+            sales[date] = {"_total": 0}
+        sales[date]["_total"] += itemrow["total"]
+        for item in itemrow["items"]:
+            name = item["itemName"]
+            if not sales[date].get(name):
+                sales[date][name] = 0
+            sales[date][name] += item["qty"]
+    response = []
+    for key, values in sales.items():
+        items = []
+        for k, v in values.items():
+            if k == "_total":
+                continue
+            items.append({"name": k, "quantity": v})
+        response.append(
+            {"date": key, "items": items, "total": values["_total"]}
+        )
+    return jsonify({"stats": response})
 
 
 @app.route('/orderOnline/generateStatistics', methods=['GET'])
@@ -824,12 +854,15 @@ def placeOrderManual():
         mongo.db.online_orders.update_one(
             {"orderId": orderId},
             {"$set": createOrder})
+        items_sold = {item["itemName"]: item["qty"] for item in items_arr}
         mongo.db.daily_statistics.update_one({
             "cartId": createOrder["cartId"],
             "timestamp": datetime.combine(date.today(), datetime.min.time())
         },
             {
-                "$inc": {"dailyCount": 1}
+                "$inc": {
+                    "dailyCount": 1
+                }
         },
             upsert=True)
         mongo.db.order_cart.delete_one({"orderId": orderId})
@@ -1271,8 +1304,8 @@ def getOrderByOrderIdEvent(data):
     return {}
 
 
-@ socketio.on("allOrderStatus")
-@ cross_origin()
+@socketio.on("allOrderStatus")
+@cross_origin()
 def allOrderStatusEvent(data):
     token = data.get("token")
     clientEmail = jwt.decode(token,
