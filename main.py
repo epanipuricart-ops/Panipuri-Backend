@@ -943,6 +943,12 @@ def saveGeneralForm():
     data["isMulti"] = isMulti
     data["uid"] = request.json.get("uid")
     data["isConverted"] = False
+    mongo.db.shopping_favourites.update_one(
+        {"email": email},
+        {"$set": {
+            "models": [data["uid"]]
+        }},
+        upsert=True)
     costing = mongo.db.costing.find_one({"uid": data["uid"]})
     if isSubscription:
         data["price"] = costing["subscriptionPrice"]
