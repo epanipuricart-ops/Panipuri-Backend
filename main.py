@@ -2925,6 +2925,27 @@ def decreaseStockUnit():
             return jsonify(data)
     return jsonify({"message": "Invalid Stock Id"}), 403
 
+
+@app.route('/franchisee/getStockLogs', methods=['GET'])
+@cross_origin()
+def getStockLogs():
+    result = mongo.db.stock_logs.aggregate([
+        {"$sort": {'timestamp': -1}},
+        {
+            "$lookup":
+            {
+                "from": 'stock',
+                "localField": 'stockId',
+                "foreignField": 'stockId',
+                "as": 'details'
+            }
+        },
+        {
+            "$unset": ["_id", "details._id"]
+        }
+    ])
+    return jsonify(list(result))
+
 # @scheduler.task('cron', id='zoho_crm_create', minute='*/30')
 # def zoho_crm_create():
 #     records = []
@@ -2938,12 +2959,12 @@ def decreaseStockUnit():
 #         send_data_to_zoho(records)
 
 
-@scheduler.task('cron', id='zoho_token_refresh', minute='*/30')
+@ scheduler.task('cron', id='zoho_token_refresh', minute='*/30')
 def zoho_token_refresh():
     refresh_zoho_access_token(force=True)
 
 
-@scheduler.task('cron', id='move_pdf', minute=0, hour=0)
+@ scheduler.task('cron', id='move_pdf', minute=0, hour=0)
 def move_agreement_pdf():
     source_dir = 'public/agreement_pdf'
     target_dir = 'tmp/backup_pdf'
@@ -2954,7 +2975,7 @@ def move_agreement_pdf():
     print(str(len(file_names)) + " Moved!!")
 
 
-@scheduler.task('cron', id='clear_sid', minute=0, hour=2)
+@ scheduler.task('cron', id='clear_sid', minute=0, hour=2)
 def clear_sid():
     mongo.db.menu.update_many({}, {"$set": {"sid": []}})
     mongo.db.devices.update_many(

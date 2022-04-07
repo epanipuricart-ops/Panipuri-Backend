@@ -68,8 +68,8 @@ def create_zoho_retainer_invoice(customer_id, item_name, price):
             "line_items": [{"description": item_name, "rate": price}],
         },
     ).json()
+    print(response)
     if response.get("code") == 0:
-        print(response)
         return response.get("retainerinvoice").get("retainerinvoice_id")
 
 
