@@ -116,7 +116,7 @@ def refresh_zoho_access_token(force=False):
         ZOHO_TOKEN["timestamp"] = time.time()
 
 
-def create_zoho_book_contact(client):
+def upsert_zoho_book_contact(client):
     contacts = "https://books.zoho.in/api/v3/contacts"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
     name = (client.get("firstName") + " " + client.get("lastName")).strip()
@@ -133,6 +133,21 @@ def create_zoho_book_contact(client):
                 "is_primary_contact": True,
             }]
     }
+    zoho_contact = mongo.db.zoho_customer.find_one(
+        {"email": client.get("email")},
+        {"_id": 0}
+    )
+    if zoho_contact:
+        response = requests.post(
+            contacts+"/"+zoho_contact["contact_id"],
+            params={
+                "organization_id": cfg.ZohoConfig.get("organization_id")
+            },
+            headers=header,
+            json=data
+        ).json()
+        print("Contact Updated: ", response)
+        return response
     response = requests.post(
         contacts,
         params={
@@ -148,12 +163,14 @@ def create_zoho_book_contact(client):
                     "zohoId": response["contact"]["contact_id"]
                 }
             },
-            upsert=True)
+            upsert=True
+        )
     else:
         print("ZOHO BOOKS:"+str(response))
+    return response
 
 
-def update_zoho_book_contact(client):
+def register_zoho_book_contact(client):
     email = client.get("email")
     attn = client.get("title")+client.get("firstName")
     address = {
@@ -401,7 +418,7 @@ def register(path):
         }
 
         mongo.db.clients.insert_one(doc)
-        create_zoho_book_contact(doc)
+        upsert_zoho_book_contact(doc)
         return jsonify({
             "title": doc['title'],
             "firstName": doc['firstName'],
@@ -686,11 +703,13 @@ def getLogo():
 def createZohoContact():
     data = request.json
     zoho_record = {
-        "First_Name": data.get("firstName"),
-        "Last_Name": data.get("lastName"),
-        "Email": data.get("email")
+        "firstName": data.get("firstName"),
+        "lastName": data.get("lastName"),
+        "email": data.get("email"),
+        "mobile": None,
     }
-    return jsonify(upsert_zoho_crm_contact(zoho_record))
+
+    return jsonify(upsert_zoho_book_contact(zoho_record))
 
 
 @app.route('/franchisee/sendOTP', methods=['POST'])
@@ -724,13 +743,6 @@ def sendOTP():
                                          data=json.dumps(data),
                                          headers=headers)
                 json_resp = json.loads(response.text)
-                zoho_record = {
-                    "First_Name": firstName,
-                    "Last_Name": lastName,
-                    "Email": email,
-                    "Phone": phone
-                }
-                upsert_zoho_crm_contact(zoho_record)
 
                 return json_resp
             except:
@@ -870,7 +882,7 @@ def saveGeneralInformation():
                     "$set": data
                 })
             data.update({"isConverted": False, "email": email})
-            update_zoho_book_contact(data)
+            register_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
@@ -878,7 +890,7 @@ def saveGeneralInformation():
         try:
             data.update({"isConverted": False, "email": email})
             mongo.db.general_forms.insert_one(data)
-            update_zoho_book_contact(data)
+            register_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
