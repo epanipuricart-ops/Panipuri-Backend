@@ -1523,6 +1523,11 @@ def uploadDocuments():
             {"email": email, "isConverted": False},
             {"$set": {"isConverted": True}}
         )
+        isMulti = client.get("isMulti")
+        if isMulti:
+            modelType = 3
+        else:
+            modelType = 1
         mongo.db.autofill_forms.update_one(
             {"email": email, "isConverted": False},
             {"$set": {"isConverted": True}}
@@ -1560,11 +1565,11 @@ def uploadDocuments():
 
         # trigger iot register api
         # modelType is hardcoded to 1
-        costing_data = mongo.db.costing.find_one({"modelType": 1})
+        costing_data = mongo.db.costing.find_one({"modelType": modelType})
         model_type = costing_data.get("uid")
         name = client.get("firstName", "") + " " + client.get("lastName", "")
         iot_data = {
-            "type": model_type,
+            "type": str(model_type),
             "uid": device_data["device_id"],
             "ownerType": 1,
             "owner": name.strip(),

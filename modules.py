@@ -50,14 +50,16 @@ def authenticate(tok):
 
 
 def create_dict(t):
-    if t == '2':
+    if t == '1':
+        return [{'name': 'n1'}]
+    elif t == '2':
         return [{'name': 'n1'},{'name': 'n2'}]
     elif t == '3':
         return [{"name": "n1"},{"name":"n2"},{"name":"n3"}]
-    elif t == '6':
-        return [{"name": "n1"},{"name":"n2"},{"name":"n3"}, {"name": "n4"}, {"name": "n5"}, {"name": "n6"}]
-    else:
-        return [{"name": "n1"},{"name":"n2"},{"name":"n3"}, {"name": "n4"}, {"name": "n5"}, {"name": "n6"}, {"name": "n7"}, {"name": "n8"}, {"name": "n9"}]
+    # elif t == '6':
+    #     return [{"name": "n1"},{"name":"n2"},{"name":"n3"}, {"name": "n4"}, {"name": "n5"}, {"name": "n6"}]
+    # else:
+    #     return [{"name": "n1"},{"name":"n2"},{"name":"n3"}, {"name": "n4"}, {"name": "n5"}, {"name": "n6"}, {"name": "n7"}, {"name": "n8"}, {"name": "n9"}]
 
 def sort(uid):
     response = db.stats.find_one({"uid": uid})
