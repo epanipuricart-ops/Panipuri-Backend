@@ -1109,7 +1109,7 @@ def payNowWizard():
             "firstname": customerName,
             "email": email,
             "service_provider": "payu_paisa",
-            "txType": True
+            "txType": False
         }
     # update statistics
     for item in items_arr:
