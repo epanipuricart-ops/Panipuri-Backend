@@ -908,10 +908,16 @@ def getGeneralInformation():
                          })
     email = decoded['email']
     try:
-        obj = mongo.db.general_forms.find_one(
+        obj1 = mongo.db.general_forms.find_one(
             {"email": email, "isConverted": {"$ne": True}}, {"_id": 0})
-        if obj:
-            return obj
+        obj2 = mongo.db.review_general_forms.find_one(
+            {"email": email, "isConverted": {"$ne": True}}, {"_id": 0})
+        if obj1 and obj2:
+            return obj1 if obj1.get('createdDate') > obj2.get('createdDate') else obj2
+        elif obj1:
+            return obj1
+        elif obj2:
+            return obj2
         else:
             return jsonify({"message", "No saved data"}), 404
     except Exception:
@@ -972,9 +978,21 @@ def saveGeneralForm():
                 "business_registered_regular", "business_unregistered"]:
             raise ValueError
         if not isSubscription and not isMulti:
-            mongo.db.general_forms.insert_one(data)
+            mongo.db.general_forms.update_one(
+                {
+                    "email": data["email"],
+                    "isConverted": False,
+                },
+                {"$set": data}, upsert=True
+            )
         else:
-            mongo.db.review_general_forms.insert_one(data)
+            mongo.db.review_general_forms.update_one(
+                {
+                    "email": data["email"],
+                    "isConverted": False,
+                },
+                {"$set": data}, upsert=True
+            )
             mongo.db.clients.update_one(
                 {'email': email},
                 {'$addToSet': {
