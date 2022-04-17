@@ -5,16 +5,17 @@ from datetime import datetime
 from pymongo import MongoClient
 import urllib.parse
 import urllib.request
-from urllib.error import URLError,HTTPError
+from urllib.error import URLError, HTTPError
 import json
 import firebase_admin
 import pyrebase
 from firebase_admin import credentials, auth
 
 client = MongoClient()
-db=client.panipuriKartz
+db = client.panipuriKartz
 
 url = "http://epanipuricart.com/online/WebApi/verifyToken"
+
 
 def checkValidity(tok):
     values = {}
@@ -36,7 +37,7 @@ def checkValidity(tok):
 
 def authenticate(tok):
     verificationStatus = 0
-    ele = db.users.find_one({"token":tok})
+    ele = db.users.find_one({"token": tok})
     if ele:
         verificationStatus = 1
         uid = ele['uid']
@@ -44,22 +45,23 @@ def authenticate(tok):
     if verificationStatus == 1:
         return True, uid
     else:
-        return False, None 
-
-
+        return False, None
 
 
 def create_dict(t):
-    if t == '1':
-        return [{'name': 'n1'}]
-    elif t == '2':
-        return [{'name': 'n1'},{'name': 'n2'}]
-    elif t == '3':
-        return [{"name": "n1"},{"name":"n2"},{"name":"n3"}]
+    t = int(t)
+    return [{'name': f'n{i}'} for i in range(1, t+1)]
+    # if t == '1':
+    #     return [{'name': 'n1'}]
+    # elif t == '2':
+    #     return [{'name': 'n1'},{'name': 'n2'}]
+    # elif t == '3':
+    #     return [{"name": "n1"},{"name":"n2"},{"name":"n3"}]
     # elif t == '6':
     #     return [{"name": "n1"},{"name":"n2"},{"name":"n3"}, {"name": "n4"}, {"name": "n5"}, {"name": "n6"}]
     # else:
     #     return [{"name": "n1"},{"name":"n2"},{"name":"n3"}, {"name": "n4"}, {"name": "n5"}, {"name": "n6"}, {"name": "n7"}, {"name": "n8"}, {"name": "n9"}]
+
 
 def sort(uid):
     response = db.stats.find_one({"uid": uid})
@@ -75,7 +77,7 @@ def sort(uid):
                 l2 = []
                 l3 = []
 
-                for ele in response["data"]:   
+                for ele in response["data"]:
                     if ele['name'] == 'n1':
                         a = {}
                         a['date'] = ele['date']
@@ -108,7 +110,7 @@ def sort(uid):
                 arr.append(d1)
                 arr.append(d2)
                 arr.append(d3)
-                return True,arr
+                return True, arr
 
             if t == '2':
                 arr = []
@@ -117,7 +119,7 @@ def sort(uid):
                 l1 = []
                 l2 = []
 
-                for ele in response["data"]:   
+                for ele in response["data"]:
                     if ele['name'] == 'n1':
                         a = {}
                         a['date'] = ele['date']
@@ -141,13 +143,14 @@ def sort(uid):
                     d2['data'] = l2[-50:]
                 arr.append(d1)
                 arr.append(d2)
-                return True,arr
-            
+                return True, arr
+
         else:
-            arr=[]
+            arr = []
             return True, arr
     else:
         return False, None
+
 
 def sort_level(uid):
     response = db.levels.find_one({"uid": uid})
@@ -163,7 +166,7 @@ def sort_level(uid):
                 l2 = []
                 l3 = []
 
-                for ele in response["data"]:   
+                for ele in response["data"]:
                     if ele['name'] == 'n1':
                         a = {}
                         a['date'] = ele['date']
@@ -196,43 +199,42 @@ def sort_level(uid):
                 arr.append(d1)
                 arr.append(d2)
                 arr.append(d3)
-                return True,arr
+                return True, arr
 
             elif t == '2':
-                    arr = []
-                    d1 = {}
-                    d2 = {}
-                    l1 = []
-                    l2 = []
+                arr = []
+                d1 = {}
+                d2 = {}
+                l1 = []
+                l2 = []
 
-                    for ele in response["data"]:   
-                        if ele['name'] == 'n1':
-                            a = {}
-                            a['date'] = ele['date']
-                            a['low'] = ele['low']
-                            #a['low'] = ele['low']
-                            l1.append(a)
-                        if ele['name'] == 'n2':
-                            a = {}
-                            a['date'] = ele['date']
-                            a['low'] = ele['low']
-                            #a['low'] = ele['low']
-                            l2.append(a)
-                    d1['name'] = 'n1'
-                    d2['name'] = 'n2'
-                    if len(l1) < 20:
-                        d1['data'] = l1
-                        d2['data'] = l2
-                    else:
-                        d1['data'] = l1[-20:]
-                        d2['data'] = l2[-20:]
-                    arr.append(d1)
-                    arr.append(d2)
-                    return True,arr
-            
+                for ele in response["data"]:
+                    if ele['name'] == 'n1':
+                        a = {}
+                        a['date'] = ele['date']
+                        a['low'] = ele['low']
+                        #a['low'] = ele['low']
+                        l1.append(a)
+                    if ele['name'] == 'n2':
+                        a = {}
+                        a['date'] = ele['date']
+                        a['low'] = ele['low']
+                        #a['low'] = ele['low']
+                        l2.append(a)
+                d1['name'] = 'n1'
+                d2['name'] = 'n2'
+                if len(l1) < 20:
+                    d1['data'] = l1
+                    d2['data'] = l2
+                else:
+                    d1['data'] = l1[-20:]
+                    d2['data'] = l2[-20:]
+                arr.append(d1)
+                arr.append(d2)
+                return True, arr
+
         else:
-            arr=[]
+            arr = []
             return True, arr
     else:
         return False, None
-        
