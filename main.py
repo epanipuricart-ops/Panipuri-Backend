@@ -139,7 +139,7 @@ def upsert_zoho_book_contact(client):
     )
     if zoho_contact:
         response = requests.post(
-            contacts+"/"+zoho_contact["contact_id"],
+            contacts+"/"+zoho_contact["zohoId"],
             params={
                 "organization_id": cfg.ZohoConfig.get("organization_id")
             },
