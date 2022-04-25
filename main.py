@@ -120,6 +120,17 @@ def upsert_zoho_book_contact(client):
     contacts = "https://books.zoho.in/api/v3/contacts"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
     name = (client.get("firstName") + " " + client.get("lastName")).strip()
+    attn = client.get("title")+client.get("firstName")
+    address = {
+        "attention": attn,
+        "address": client.get("address"),
+        "state_code": "OD",
+        "city": client.get("town", ""),
+        "state": "OD",
+        "zip": int(client.get("pincode")),
+        "country": "India",
+        "phone": client.get("mobile")
+    }
     data = {
         "contact_name": name,
         "contact_persons": [
@@ -131,7 +142,11 @@ def upsert_zoho_book_contact(client):
                 "phone": client.get("mobile"),
                 "mobile": client.get("mobile"),
                 "is_primary_contact": True,
-            }]
+            }],
+        "billing_address": address,
+        "shipping_address": address,
+        "gst_no": client.get("gst_no"),
+        "gst_treatment": client.get("gst_treatment")
     }
     zoho_contact = mongo.db.zoho_customer.find_one(
         {"email": client.get("email")},
@@ -998,6 +1013,7 @@ def saveGeneralForm():
                 {'$addToSet': {
                     'roles': "in_review"
                 }})
+        upsert_zoho_book_contact(data)
         return jsonify({"message": "Successfully saved"})
     except Exception:
         return jsonify({"message": "Some error occurred"}), 500
@@ -1582,12 +1598,12 @@ def uploadDocuments():
                                  {"$set": default_menu}, upsert=True)
 
         # trigger iot register api
-        # modelType is hardcoded to 1
-        costing_data = mongo.db.costing.find_one({"modelType": modelType})
-        model_type = costing_data.get("uid")
+        model_uid = order_data.get("model_uid", 1)
+        itemId = mongo.db.costing.find_one({"uid": model_uid})
+        iot_type = itemId.get("iot_type")
         name = client.get("firstName", "") + " " + client.get("lastName", "")
         iot_data = {
-            "type": str(model_type),
+            "type": iot_type,
             "uid": device_data["device_id"],
             "ownerType": 1,
             "owner": name.strip(),
@@ -1600,9 +1616,7 @@ def uploadDocuments():
         print("Register Device Response: ", response.text)
 
         # zoho sales order
-        model_uid = order_data.get("model_uid", 1)
         zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
-        itemId = mongo.db.costing.find_one({"uid": model_uid})
         if zohoId and itemId:
             send_sales_mail(
                 create_zoho_sales_order(
