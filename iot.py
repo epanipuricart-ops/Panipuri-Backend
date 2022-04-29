@@ -683,7 +683,17 @@ def getLevel():
             return jsonify({"message": "No record found"}), 403
     else:
         return jsonify({"message": "Authentication Error"}), 401
-
+    
+@app.route('/getLatestLevel', methods=['GET', 'POST'])
+@cross_origin()
+def latestLevel():
+    if request.method == "GET":
+        uid = request.args.get("deviceId")
+        data = mongo.db.levels.find_one({'uid': uid})['data'][-3:]
+        print(data)
+        return jsonify({"n1": data[0]["low"], "n2": data[1]["low"], "n3": data[2]["low"]})
+    else:
+        return jsonify({"message": "Authorization error"}), 403
 
 @app.route("/wizard/getLevel", methods=["GET", "POST"])
 @cross_origin()
