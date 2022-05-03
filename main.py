@@ -1001,6 +1001,10 @@ def saveGeneralForm():
                 {"$set": data}, upsert=True
             )
         else:
+            immediateUnits = int(request.json.get('immediateUnits'))
+            unitsInNextYear = int(request.json.get('unitsInNxtYr'))
+            data['immediateUnits'] = immediateUnits
+            data['unitsInNextYear'] = unitsInNextYear
             mongo.db.review_general_forms.update_one(
                 {
                     "email": data["email"],
