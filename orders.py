@@ -17,7 +17,15 @@ import re
 import subprocess
 import requests
 from pymongo.collection import ReturnDocument
+import logging
 
+# Create and configure logger
+logging.basicConfig(filename="ordersOnline.log",
+                    format='%(asctime)s %(message)s',
+                    filemode='a')
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 INVOICE_PDF_FOLDER = 'public/invoice_pdf'
 TRENDING_IMAGES_FOLDER = 'public/trending_images'

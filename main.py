@@ -1,7 +1,7 @@
-from operator import ge
 from flask import (Flask, session, send_from_directory, send_file,
                    render_template)
 from flask import request, redirect, url_for
+from waitress import serve
 from flask_pymongo import PyMongo
 from pymongo import ReturnDocument
 from flask import jsonify
@@ -24,6 +24,15 @@ import json
 import random
 import shutil
 import re
+import logging
+
+# Create and configure logger
+logging.basicConfig(filename="franchisee.log",
+                    format='%(asctime)s %(message)s',
+                    filemode='a')
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 UPLOAD_FOLDER = 'public/img'
 PROFILE_FOLDER = 'public/profile'
@@ -3100,8 +3109,13 @@ def remind_otp():
 if __name__ == "__main__":
     print("starting...")
     refresh_zoho_access_token(force=True)
-    app.run(host=cfg.Flask['HOST'],
-            port=cfg.Flask['PORT'],
-            threaded=cfg.Flask['THREADED'],
-            debug=True)
+    serve(
+        app,
+        host=cfg.Flask["HOST"],
+        port=cfg.Flask["PORT"]
+    )
+    # app.run(host=cfg.Flask['HOST'],
+    #         port=cfg.Flask['PORT'],
+    #         threaded=cfg.Flask['THREADED'],
+    #         debug=True)
     # app.run(debug=True)
