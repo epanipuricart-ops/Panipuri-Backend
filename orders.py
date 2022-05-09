@@ -21,7 +21,7 @@ import logging
 
 # Create and configure logger
 logging.basicConfig(filename="ordersOnline.log",
-                    format='%(asctime)s %(message)s',
+                    format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s',
                     filemode='a')
 
 logger = logging.getLogger()

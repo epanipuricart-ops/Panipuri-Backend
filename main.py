@@ -28,7 +28,7 @@ import logging
 
 # Create and configure logger
 logging.basicConfig(filename="franchisee.log",
-                    format='%(asctime)s %(message)s',
+                    format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s',
                     filemode='a')
 
 logger = logging.getLogger()
@@ -132,14 +132,17 @@ def upsert_zoho_book_contact(client):
     attn = client.get("title")+client.get("firstName")
     address = {
         "attention": attn,
-        "address": client.get("address"),
         "state_code": "OD",
-        "city": client.get("town", ""),
         "state": "OD",
-        "zip": int(client.get("pincode")),
         "country": "India",
         "phone": client.get("mobile")
     }
+    if client.get("town"):
+        address["city"] = client.get("town")
+    if client.get("pincode"):
+        address["zip"] = int(client.get("pincode"))
+    if client.get("address"):
+        address["address"] = client.get("address")
     data = {
         "contact_name": name,
         "contact_persons": [
@@ -153,10 +156,12 @@ def upsert_zoho_book_contact(client):
                 "is_primary_contact": True,
             }],
         "billing_address": address,
-        "shipping_address": address,
-        "gst_no": client.get("gst_no"),
-        "gst_treatment": client.get("gst_treatment")
+        "shipping_address": address
     }
+    if client.get("gst_no"):
+        data["gst_no"] = client.get("gst_no")
+    if client.get("gst_treatment"):
+        data["gst_treatment"] = client.get("gst_treatment")
     zoho_contact = mongo.db.zoho_customer.find_one(
         {"email": client.get("email")},
         {"_id": 0}
