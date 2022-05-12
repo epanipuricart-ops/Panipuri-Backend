@@ -1001,6 +1001,7 @@ def saveGeneralForm():
                 {"$set": data}, upsert=True
             )
         else:
+            isSave = bool(request.json.get('isSave'))
             immediateUnits = int(request.json.get('immediateUnits'))
             unitsInNextYear = int(request.json.get('unitsInNxtYr'))
             data['immediateUnits'] = immediateUnits
@@ -1012,11 +1013,12 @@ def saveGeneralForm():
                 },
                 {"$set": data}, upsert=True
             )
-            mongo.db.clients.update_one(
-                {'email': email},
-                {'$addToSet': {
-                    'roles': "in_review"
-                }})
+            if not isSave:
+                mongo.db.clients.update_one(
+                    {'email': email},
+                    {'$addToSet': {
+                        'roles': "in_review"
+                    }})
         upsert_zoho_book_contact(data)
         return jsonify({"message": "Successfully saved"})
     except Exception:
