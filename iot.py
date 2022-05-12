@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 from flask_pymongo import PyMongo
 from flask_cors import CORS, cross_origin
+from waitress import serve
 import time
 import datetime
 import os
@@ -11,6 +12,15 @@ from modules import *
 from datetime import datetime, timedelta, date
 from flask_apscheduler import APScheduler
 import requests
+import logging
+
+# Create and configure logger
+logging.basicConfig(filename="iot.log",
+                    format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s',
+                    filemode='a')
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 app = Flask(__name__, static_url_path="")
 
@@ -683,7 +693,8 @@ def getLevel():
             return jsonify({"message": "No record found"}), 403
     else:
         return jsonify({"message": "Authentication Error"}), 401
-    
+
+
 @app.route('/getLatestLevel', methods=['GET', 'POST'])
 @cross_origin()
 def latestLevel():
@@ -694,6 +705,7 @@ def latestLevel():
         return jsonify({"n1": data[0]["low"], "n2": data[1]["low"], "n3": data[2]["low"]})
     else:
         return jsonify({"message": "Authorization error"}), 403
+
 
 @app.route("/wizard/getLevel", methods=["GET", "POST"])
 @cross_origin()
@@ -1328,9 +1340,14 @@ def payuFailureWizard():
 if __name__ == "__main__":
     print("starting...")
     refresh_zoho_access_token(force=True)
-    app.run(
+    serve(
+        app,
         host=cfg.IOTFlask["HOST"],
-        port=cfg.IOTFlask["PORT"],
-        threaded=cfg.IOTFlask["THREADED"],
-        debug=True,
+        port=cfg.IOTFlask["PORT"]
     )
+    # app.run(
+    #     host=cfg.IOTFlask["HOST"],
+    #     port=cfg.IOTFlask["PORT"],
+    #     threaded=cfg.IOTFlask["THREADED"],
+    #     debug=True,
+    # )

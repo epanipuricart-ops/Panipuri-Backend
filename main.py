@@ -1,7 +1,7 @@
-from operator import ge
 from flask import (Flask, session, send_from_directory, send_file,
                    render_template)
 from flask import request, redirect, url_for
+from waitress import serve
 from flask_pymongo import PyMongo
 from pymongo import ReturnDocument
 from flask import jsonify
@@ -24,6 +24,15 @@ import json
 import random
 import shutil
 import re
+import logging
+
+# Create and configure logger
+logging.basicConfig(filename="franchisee.log",
+                    format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s',
+                    filemode='a')
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
 UPLOAD_FOLDER = 'public/img'
 PROFILE_FOLDER = 'public/profile'
@@ -123,14 +132,17 @@ def upsert_zoho_book_contact(client):
     attn = client.get("title")+client.get("firstName")
     address = {
         "attention": attn,
-        "address": client.get("address"),
         "state_code": "OD",
-        "city": client.get("town", ""),
         "state": "OD",
-        "zip": int(client.get("pincode")),
         "country": "India",
         "phone": client.get("mobile")
     }
+    if client.get("town"):
+        address["city"] = client.get("town")
+    if client.get("pincode"):
+        address["zip"] = int(client.get("pincode"))
+    if client.get("address"):
+        address["address"] = client.get("address")
     data = {
         "contact_name": name,
         "contact_persons": [
@@ -144,10 +156,12 @@ def upsert_zoho_book_contact(client):
                 "is_primary_contact": True,
             }],
         "billing_address": address,
-        "shipping_address": address,
-        "gst_no": client.get("gst_no"),
-        "gst_treatment": client.get("gst_treatment")
+        "shipping_address": address
     }
+    if client.get("gst_no"):
+        data["gst_no"] = client.get("gst_no")
+    if client.get("gst_treatment"):
+        data["gst_treatment"] = client.get("gst_treatment")
     zoho_contact = mongo.db.zoho_customer.find_one(
         {"email": client.get("email")},
         {"_id": 0}
@@ -721,6 +735,7 @@ def createZohoContact():
         "firstName": data.get("firstName"),
         "lastName": data.get("lastName"),
         "email": data.get("email"),
+        "title": data.get("title", ""),
         "mobile": None,
     }
 
@@ -3102,8 +3117,13 @@ def remind_otp():
 if __name__ == "__main__":
     print("starting...")
     refresh_zoho_access_token(force=True)
-    app.run(host=cfg.Flask['HOST'],
-            port=cfg.Flask['PORT'],
-            threaded=cfg.Flask['THREADED'],
-            debug=True)
+    serve(
+        app,
+        host=cfg.Flask["HOST"],
+        port=cfg.Flask["PORT"]
+    )
+    # app.run(host=cfg.Flask['HOST'],
+    #         port=cfg.Flask['PORT'],
+    #         threaded=cfg.Flask['THREADED'],
+    #         debug=True)
     # app.run(debug=True)
