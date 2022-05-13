@@ -98,6 +98,7 @@ def get_last_id(city):
     else:
         return "epanipuricart.dummy.5"
 
+
 def get_last_multi_id(city, type):
     data = mongo.db.city_wise_count.find_one(
         {"city": re.compile(city, re.IGNORECASE)})
@@ -108,6 +109,7 @@ def get_last_multi_id(city, type):
             return "epanipuricart." + data["city"] + ".B"
     else:
         return "epanipuricart.dummy.5"
+
 
 def generate_custom_id():
     return (
@@ -1357,31 +1359,40 @@ def payuSuccess():
         "deliveryDate": "",
         "isAgreement": False
     })
-    
+
     costing_data = mongo.db.costing.find_one({"uid": model_uid})
     if model_uid in [16, 17]:
         data = mongo.db.review_general_forms.find_one(
-        {"email": txn_data['email'], "isConverted": False})
+            {"email": txn_data['email'], "isConverted": False})
         city = list(data["selectedTowns"])
         device_id_list = []
         for c in city:
-            device_id = get_last_multi_id(city, costing_data['name'])
+            device_id = get_last_multi_id(c, costing_data['name'])
             device_id_list.append(device_id)
-    else:    
+            mongo.db.device_multi_ids.insert_one({
+                "email": txn_data['email'],
+                "device_id": device_id,
+                "state": data.get("state"),
+                "town": c,
+                "location": data.get("location"),
+                "order_id": "EK-" + str(order_id),
+                "isSubscription": data["isSubscription"]
+            })
+    else:
         data = mongo.db.general_forms.find_one(
-        {"email": txn_data['email'], "isConverted": False})
+            {"email": txn_data['email'], "isConverted": False})
         city = data['town']
         device_id = get_last_id(city)
-        
-    mongo.db.device_ids.insert_one({
-        "email": txn_data['email'],
-        "device_id": device_id,
-        "state": data.get("state"),
-        "town": city,
-        "location": data.get("location"),
-        "order_id": "EK-" + str(order_id),
-        "isSubscription": data["isSubscription"]
-    })
+
+        mongo.db.device_ids.insert_one({
+            "email": txn_data['email'],
+            "device_id": device_id,
+            "state": data.get("state"),
+            "town": city,
+            "location": data.get("location"),
+            "order_id": "EK-" + str(order_id),
+            "isSubscription": data["isSubscription"]
+        })
     mongo.db.order_history.insert_one({
         "order_id": order_id,
         "status": "pending",
