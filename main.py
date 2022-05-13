@@ -1361,7 +1361,7 @@ def payuSuccess():
     })
 
     costing_data = mongo.db.costing.find_one({"uid": model_uid})
-    if model_uid in [16, 17]:
+    if model_uid in [14, 17]:
         data = mongo.db.review_general_forms.find_one(
             {"email": txn_data['email'], "isConverted": False})
         city = list(data["selectedTowns"])
