@@ -1378,6 +1378,11 @@ def payuSuccess():
                 "order_id": "EK-" + str(order_id),
                 "isSubscription": data["isSubscription"]
             })
+        mongo.db.clients.update_one(
+            {'email': txn_data['email']},
+            {
+                '$pull': {'roles': 'form_accepted'},
+            })
     else:
         data = mongo.db.general_forms.find_one(
             {"email": txn_data['email'], "isConverted": False})
