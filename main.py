@@ -98,6 +98,16 @@ def get_last_id(city):
     else:
         return "epanipuricart.dummy.5"
 
+def get_last_multi_id(city, type):
+    data = mongo.db.city_wise_count.find_one(
+        {"city": re.compile(city, re.IGNORECASE)})
+    if data:
+        if type == 'Table Top':
+            return "epanipuricart." + data["city"] + ".A"
+        else:
+            return "epanipuricart." + data["city"] + ".B"
+    else:
+        return "epanipuricart.dummy.5"
 
 def generate_custom_id():
     return (
@@ -958,6 +968,7 @@ def getGeneralInformation():
 @cross_origin()
 @verify_token
 def saveGeneralForm():
+    print('start')
     token = request.headers['Authorization']
     decoded = jwt.decode(token,
                          options={
@@ -1016,7 +1027,9 @@ def saveGeneralForm():
                 {"$set": data}, upsert=True
             )
         else:
+            print('reached')
             isSave = bool(request.json.get('isSave'))
+            print(isSave)
             immediateUnits = int(request.json.get('immediateUnits'))
             unitsInNextYear = int(request.json.get('unitsInNxtYr'))
             data['immediateUnits'] = immediateUnits
@@ -1344,10 +1357,22 @@ def payuSuccess():
         "deliveryDate": "",
         "isAgreement": False
     })
-    data = mongo.db.general_forms.find_one(
+    
+    costing_data = mongo.db.costing.find_one({"uid": model_uid})
+    if model_uid in [16, 17]:
+        data = mongo.db.review_general_forms.find_one(
         {"email": txn_data['email'], "isConverted": False})
-    city = data['town']
-    device_id = get_last_id(city)
+        city = list(data["selectedTowns"])
+        device_id_list = []
+        for c in city:
+            device_id = get_last_multi_id(city, costing_data['name'])
+            device_id_list.append(device_id)
+    else:    
+        data = mongo.db.general_forms.find_one(
+        {"email": txn_data['email'], "isConverted": False})
+        city = data['town']
+        device_id = get_last_id(city)
+        
     mongo.db.device_ids.insert_one({
         "email": txn_data['email'],
         "device_id": device_id,
