@@ -146,9 +146,10 @@ def upsert_zoho_book_contact(client):
         "attention": attn,
         "state_code": "OD",
         "state": "OD",
-        "country": "India",
-        "phone": client.get("mobile")
+        "country": "India"
     }
+    if client.get("mobile"):
+        address["phone"] = client.get("mobile")
     if client.get("town"):
         address["city"] = client.get("town")
     if client.get("pincode"):
@@ -163,13 +164,14 @@ def upsert_zoho_book_contact(client):
                 "first_name": client.get("firstName"),
                 "last_name": client.get("lastName"),
                 "email": client.get("email"),
-                "phone": client.get("mobile"),
-                "mobile": client.get("mobile"),
                 "is_primary_contact": True,
             }],
         "billing_address": address,
         "shipping_address": address
     }
+    if client.get("mobile"):
+        data["contact_persons"]["mobile"] = client.get("mobile")
+        data["contact_persons"]["phone"] = client.get("mobile")
     if client.get("gst_no"):
         data["gst_no"] = client.get("gst_no")
     if client.get("gst_treatment"):
@@ -221,9 +223,10 @@ def register_zoho_book_contact(client):
         "city": client.get("town"),
         "state": "OD",
         "zip": int(client.get("pincode")),
-        "country": "India",
-        "phone": client.get("mobile")
+        "country": "India"
     }
+    if client.get("mobile"):
+        address["phone"] = client.get("mobile")
     data = {
         "billing_address": address,
         "shipping_address": address,
@@ -811,6 +814,14 @@ def verifyOTP():
                 token, phone, otp)
             response = requests.get(spring_url + target_url, headers=headers)
             json_resp = json.loads(response.text)
+            zoho_record = {
+                "firstName": request.json['firstName'],
+                "lastName": request.json['lastName'],
+                "email": request.json['email'],
+                "title": request.json['title'],
+                "mobile": request.json['phone'],
+            }
+            upsert_zoho_book_contact(zoho_record)
             return json_resp
         except:
             return jsonify({"message": "Some Error Occurred"}), 500
