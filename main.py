@@ -748,7 +748,7 @@ def createZohoContact():
         "lastName": data.get("lastName"),
         "email": data.get("email"),
         "title": data.get("title", ""),
-        "mobile": None,
+        "mobile": data.get("phone"),
     }
 
     return jsonify(upsert_zoho_book_contact(zoho_record))
