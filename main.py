@@ -179,7 +179,7 @@ def upsert_zoho_book_contact(client):
         {"_id": 0}
     )
     if zoho_contact:
-        response = requests.post(
+        response = requests.put(
             contacts+"/"+zoho_contact["zohoId"],
             params={
                 "organization_id": cfg.ZohoConfig.get("organization_id")
@@ -234,7 +234,7 @@ def register_zoho_book_contact(client):
     contacts = "https://books.zoho.in/api/v3/contacts/" + \
         str(zohoId.get("zohoId"))
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
-    response = requests.post(
+    response = requests.put(
         contacts,
         params={
             "organization_id": cfg.ZohoConfig.get("organization_id")
