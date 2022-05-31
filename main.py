@@ -823,7 +823,8 @@ def verifyOTP():
             }
             upsert_zoho_book_contact(zoho_record)
             return json_resp
-        except:
+        except Exception as e:
+            print(e)
             return jsonify({"message": "Some Error Occurred"}), 500
     else:
         return jsonify({"message": "Missing Parameters"}), 400
