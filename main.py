@@ -216,53 +216,53 @@ def upsert_zoho_book_contact(client):
     return response
 
 
-def register_zoho_book_contact(client):
-    email = client.get("email")
-    attn = client.get("title")+client.get("firstName")
-    address = {
-        "attention": attn,
-        "address": client.get("address"),
-        "state_code": "OD",
-        "city": client.get("town"),
-        "state": "OD",
-        "zip": int(client.get("pincode")),
-        "country": "India"
-    }
-    if client.get("mobile"):
-        address["phone"] = client.get("mobile")
-    data = {
-        "billing_address": address,
-        "shipping_address": address,
-        "gst_no": client.get("gst_no"),
-        "gst_treatment": client.get("gst_treatment")
-    }
-    zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
-    contacts = "https://books.zoho.in/api/v3/contacts/" + \
-        str(zohoId.get("zohoId"))
-    header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
-    response = requests.put(
-        contacts,
-        params={
-            "organization_id": cfg.ZohoConfig.get("organization_id")
-        },
-        headers=header, json=data).json()
-    print("ZOHO BOOKS UPDATE:"+str(response))
+# def register_zoho_book_contact(client):
+#     email = client.get("email")
+#     attn = client.get("title")+client.get("firstName")
+#     address = {
+#         "attention": attn,
+#         "address": client.get("address"),
+#         "state_code": "OD",
+#         "city": client.get("town"),
+#         "state": "OD",
+#         "zip": int(client.get("pincode")),
+#         "country": "India"
+#     }
+#     if client.get("mobile"):
+#         address["phone"] = client.get("mobile")
+#     data = {
+#         "billing_address": address,
+#         "shipping_address": address,
+#         "gst_no": client.get("gst_no"),
+#         "gst_treatment": client.get("gst_treatment")
+#     }
+#     zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+#     contacts = "https://books.zoho.in/api/v3/contacts/" + \
+#         str(zohoId.get("zohoId"))
+#     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
+#     response = requests.put(
+#         contacts,
+#         params={
+#             "organization_id": cfg.ZohoConfig.get("organization_id")
+#         },
+#         headers=header, json=data).json()
+#     print("ZOHO BOOKS UPDATE:"+str(response))
 
 
-def upsert_zoho_crm_contact(client):
-    contacts = "https://www.zohoapis.in/crm/v2/Contacts/upsert"
-    header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
-    data = {
-        "data": [client],
-        "trigger": [
-            "approval",
-            "workflow",
-            "blueprint"
-        ]
-    }
-    response = requests.post(contacts, headers=header, json=data).json()
-    print(response)
-    return response
+# def upsert_zoho_crm_contact(client):
+#     contacts = "https://www.zohoapis.in/crm/v2/Contacts/upsert"
+#     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
+#     data = {
+#         "data": [client],
+#         "trigger": [
+#             "approval",
+#             "workflow",
+#             "blueprint"
+#         ]
+#     }
+#     response = requests.post(contacts, headers=header, json=data).json()
+#     print(response)
+#     return response
 
 
 def send_estimate_mail(estimate, email):
