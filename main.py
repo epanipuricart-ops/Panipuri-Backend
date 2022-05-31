@@ -1233,9 +1233,9 @@ def payNow():
         "productinfo":
         (model_data['name'] + " " + model_data['extension']).rstrip(),
         "surl":
-        "http://15.207.147.88:5000/franchisee/payuSuccess",
+        "https://epanipuricart.com/franchisee/payuSuccess",
         "furl":
-        "http://15.207.147.88:5000/franchisee/payuFailure",
+        "https://epanipuricart.com/franchisee/payuFailure",
         "firstname":
         firstName,
         "email":
@@ -1497,16 +1497,18 @@ def getAllOrders():
     for items in data:
         if items['status'] != 'pending':
             d = {}
-            email = mongo.db.docs.find_one({"order_id":
-                                            items['order_id']})['email']
-            name1 = mongo.db.clients.find_one({"email": email})['firstName']
-            name2 = mongo.db.clients.find_one({"email": email})['lastName']
-            d['email'] = email
-            d['name'] = name1 + " " + name2
-            for keys in items:
-                if keys != "_id":
-                    d[keys] = items[keys]
-            all_orders.append(d)
+            if mongo.db.docs.find_one({"order_id": items['order_id']}):
+                email = mongo.db.docs.find_one({"order_id":
+                                                items['order_id']})['email']
+                if mongo.db.clients.find_one({"email": email}):
+                    name1 = mongo.db.clients.find_one({"email": email})['firstName']
+                    name2 = mongo.db.clients.find_one({"email": email})['lastName']
+                    d['email'] = email
+                    d['name'] = name1 + " " + name2
+                    for keys in items:
+                        if keys != "_id":
+                            d[keys] = items[keys]
+                    all_orders.append(d)
 
     return jsonify({"orders": all_orders})
     '''try:
