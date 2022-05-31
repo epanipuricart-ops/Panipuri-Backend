@@ -25,6 +25,7 @@ import random
 import shutil
 import re
 import logging
+import traceback
 
 # Create and configure logger
 logging.basicConfig(filename="franchisee.log",
@@ -144,8 +145,7 @@ def upsert_zoho_book_contact(client):
     attn = client.get("title")+client.get("firstName")
     address = {
         "attention": attn,
-        "state_code": "OD",
-        "state": "OD",
+        "state": client.get("state", ""),
         "country": "India"
     }
     if client.get("mobile"):
@@ -170,8 +170,8 @@ def upsert_zoho_book_contact(client):
         "shipping_address": address
     }
     if client.get("mobile"):
-        data["contact_persons"]["mobile"] = client.get("mobile")
-        data["contact_persons"]["phone"] = client.get("mobile")
+        data["contact_persons"][0]["mobile"] = client.get("mobile")
+        data["contact_persons"][0]["phone"] = client.get("mobile")
     if client.get("gst_no"):
         data["gst_no"] = client.get("gst_no")
     if client.get("gst_treatment"):
@@ -180,7 +180,9 @@ def upsert_zoho_book_contact(client):
         {"email": client.get("email")},
         {"_id": 0}
     )
+    print("ZOHO SENT DATA: ", data)
     if zoho_contact:
+        data["contact_persons"][0].pop("email")
         response = requests.put(
             contacts+"/"+zoho_contact["zohoId"],
             params={
@@ -197,6 +199,7 @@ def upsert_zoho_book_contact(client):
             "organization_id": cfg.ZohoConfig.get("organization_id")
         },
         headers=header, json=data).json()
+    print("Contact Created: ", response)
     if response["code"] == 0:
         mongo.db.zoho_customer.update_one(
             {
@@ -936,7 +939,8 @@ def saveGeneralInformation():
                     "$set": data
                 })
             data.update({"isConverted": False, "email": email})
-            register_zoho_book_contact(data)
+            # register_zoho_book_contact(data)
+            upsert_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
@@ -944,7 +948,8 @@ def saveGeneralInformation():
         try:
             data.update({"isConverted": False, "email": email})
             mongo.db.general_forms.insert_one(data)
-            register_zoho_book_contact(data)
+            # register_zoho_book_contact(data)
+            upsert_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
         except Exception:
             return jsonify({"message": "Some error occurred"}), 500
@@ -1063,7 +1068,8 @@ def saveGeneralForm():
                     }})
         upsert_zoho_book_contact(data)
         return jsonify({"message": "Successfully saved"})
-    except Exception:
+    except Exception as e:
+        print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -1518,8 +1524,10 @@ def getAllOrders():
                 email = mongo.db.docs.find_one({"order_id":
                                                 items['order_id']})['email']
                 if mongo.db.clients.find_one({"email": email}):
-                    name1 = mongo.db.clients.find_one({"email": email})['firstName']
-                    name2 = mongo.db.clients.find_one({"email": email})['lastName']
+                    name1 = mongo.db.clients.find_one(
+                        {"email": email})['firstName']
+                    name2 = mongo.db.clients.find_one(
+                        {"email": email})['lastName']
                     d['email'] = email
                     d['name'] = name1 + " " + name2
                     for keys in items:
