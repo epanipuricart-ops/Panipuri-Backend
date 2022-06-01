@@ -1570,6 +1570,141 @@ def createDefaultMenu():
     return jsonify({"message": "Menu created successfully"})
 
 
+@app.route('/franchisee/manualUploadDocuments', methods=['POST'])
+@cross_origin()
+def manualUploadDocuments():
+    email = request.form['email']
+    user_id = mongo.db.clients.find_one(
+        {"email": email}, {"_id": 0})["firebase_id"]
+    order_id = request.form['order_id']
+    if 'files[]' not in request.files:
+        return jsonify({"message": "Missing files"}), 400
+    else:
+        data = mongo.db.docs.find_one({"order_id": order_id})
+        if data is None:
+            mongo.db.docs.insert_one({
+                "email": email,
+                "sign": "",
+                "aadhar": "",
+                "photo": "",
+                "order_id": order_id,
+                "pdf": "",
+                "agreement-pdf": "",
+                "eAadharSign": -1
+            })
+        files = request.files.getlist('files[]')
+        for file in files:
+            if file and allowed_file(file.filename):
+                for ele in request.form:
+                    if file.filename.lower() == request.form[ele].lower():
+                        filename_temp = secure_filename(file.filename)
+                        extension = filename_temp.split('.')[-1]
+                        timestamp = int(round(time.time() * 1000))
+                        hex_form = str(hex(timestamp *
+                                           random.randint(1, 5)))[2:]
+                        enc_filename = str(ele) + "_" + hex_form + str(
+                            user_id[-4:]) + "." + extension
+                        try:
+                            mongo.db.docs.update_one(
+                                {"order_id": order_id},
+                                {"$set": {
+                                    str(ele): enc_filename
+                                }})
+                            file.save(
+                                os.path.join(app.config['UPLOAD_FOLDER'],
+                                             enc_filename))
+
+                        except Exception:
+                            return jsonify({"message":
+                                            "Some Error Occurred"}), 500
+
+        # currentRoles = mongo.db.clients.find_one(
+        #     {"email": email}, {"roles": 1})
+        # currentRoles = currentRoles.get("roles", [])
+        # newRole = None
+        # if 'multi_unit_paid_subscriber' in currentRoles:
+        #     newRole = "multi_unit_franchisee"
+        # else:
+        #     newRole = "franchisee"
+        mongo.db.clients.update_one({"email": email},
+                                    {"$addToSet": {
+                                        "roles": 'franchisee'
+                                    }})
+
+        client = mongo.db.general_forms.find_one_and_update(
+            {"email": email, "isConverted": False},
+            {"$set": {"isConverted": True}}
+        )
+        isMulti = client.get("isMulti")
+        if isMulti:
+            modelType = 3
+        else:
+            modelType = 1
+        mongo.db.autofill_forms.update_one(
+            {"email": email, "isConverted": False},
+            {"$set": {"isConverted": True}}
+        )
+        order_data = mongo.db.orders.find_one_and_update(
+            {"order_id": order_id},
+            {"$set": {
+                "status": "placed",
+                "isAgreement": True
+            }})
+        mongo.db.order_history.insert_one({
+            "order_id": order_id,
+            "status": "placed",
+            "date": int(round(time.time() * 1000))
+        })
+        payload = {
+            "attachmentPaths": [],
+            "bccAddresses": [],
+            "ccAddresses": [],
+            "mailBody": "Your Order "+str(order_id)+" has been successfully placed.",
+            "mailSubject": "Order Successful",
+            "toAddresses": [email, "ceo@epanipuricart.com"]
+        }
+        requests.post(mailer_url + 'send-mail', json=payload)
+
+        # create Default Menu
+        device_data = mongo.db.device_ids.find_one({"order_id": order_id})
+        default_menu = cfg.DefaultMenu.copy()
+        for category in default_menu["menu"]:
+            category.update({"categoryId": generate_custom_id()})
+            for item in category["items"]:
+                item.update({"itemId": generate_custom_id()})
+        mongo.db.menu.update_one({"cartId": device_data["device_id"]},
+                                 {"$set": default_menu}, upsert=True)
+
+        # trigger iot register api
+        model_uid = order_data.get("model_uid", 1)
+        itemId = mongo.db.costing.find_one({"uid": model_uid})
+        iot_type = itemId.get("iot_type")
+        name = client.get("firstName", "") + " " + client.get("lastName", "")
+        iot_data = {
+            "type": iot_type,
+            "uid": device_data["device_id"],
+            "ownerType": 1,
+            "owner": name.strip(),
+            "address": ", ".join([device_data[key]
+                                  for key in ["location", "town", "state"]])
+        }
+        print(iot_data)
+        response = requests.post(
+            iot_api_url+"/wizard/registerDevice", json=iot_data)
+        print("Register Device Response: ", response.text)
+
+        # zoho sales order
+        zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+        if zohoId and itemId:
+            send_sales_mail(
+                create_zoho_sales_order(
+                    zohoId.get("zohoId"),
+                    itemId.get("zoho_itemid")),
+                email)
+
+        return jsonify({"message": "Success"})
+
+
 @app.route('/franchisee/uploadDocuments', methods=['POST'])
 @cross_origin()
 @verify_token
