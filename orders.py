@@ -1250,14 +1250,14 @@ def searchByPhone():
     return jsonify(resultList)
 
 
-@socketio.on('connect')
+@socketio.on('connect', namespace='/orderOnline')
 def connected():
     print("SID is", request.sid)
     emit("myresponse", {"status": "connected"})
     return {}
 
 
-@socketio.on("registerSid")
+@socketio.on("registerSid", namespace='/orderOnline')
 @cross_origin()
 def registerSidEvent(data):
     cartId = data.get("cartId")
@@ -1271,7 +1271,7 @@ def registerSidEvent(data):
     return {}
 
 
-@socketio.on("registerSidByCustomer")
+@socketio.on("registerSidByCustomer", namespace='/orderOnline')
 @cross_origin()
 def registerSidByCustomer(data):
     token = data.get("token")
@@ -1290,7 +1290,7 @@ def registerSidByCustomer(data):
     return {}
 
 
-@socketio.on("getOrderByOrderId")
+@socketio.on("getOrderByOrderId", namespace='/orderOnline')
 @cross_origin()
 def getOrderByOrderIdEvent(data):
     orderId = data.get("orderId")
@@ -1312,7 +1312,7 @@ def getOrderByOrderIdEvent(data):
     return {}
 
 
-@socketio.on("allOrderStatus")
+@socketio.on("allOrderStatus", namespace='/orderOnline')
 @cross_origin()
 def allOrderStatusEvent(data):
     token = data.get("token")
