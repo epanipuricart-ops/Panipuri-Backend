@@ -522,6 +522,7 @@ def register(path):
                 "roles": doc['roles']
             })
         except Exception:
+            print(traceback.format_exc())
             return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -828,6 +829,7 @@ def verifyOTP():
             return json_resp
         except Exception as e:
             print(e)
+            print(traceback.format_exc())
             return jsonify({"message": "Some Error Occurred"}), 500
     else:
         return jsonify({"message": "Missing Parameters"}), 400
@@ -885,6 +887,7 @@ def saveAutofillInformation():
             }, upsert=True)
         return jsonify({"message": "Successfully saved"})
     except Exception:
+        print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -907,6 +910,7 @@ def getAutofillInformation():
         else:
             return jsonify({"message", "No saved data"}), 404
     except Exception:
+        print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -943,6 +947,7 @@ def saveGeneralInformation():
             upsert_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
         except Exception:
+            print(traceback.format_exc())
             return jsonify({"message": "Some error occurred"}), 500
     else:
         try:
@@ -952,6 +957,7 @@ def saveGeneralInformation():
             upsert_zoho_book_contact(data)
             return jsonify({"message": "Successfully saved"})
         except Exception:
+            print(traceback.format_exc())
             return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -980,6 +986,7 @@ def getGeneralInformation():
         else:
             return jsonify({"message", "No saved data"}), 404
     except Exception:
+        print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -1068,7 +1075,7 @@ def saveGeneralForm():
                     }})
         upsert_zoho_book_contact(data)
         return jsonify({"message": "Successfully saved"})
-    except Exception as e:
+    except Exception:
         print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
@@ -1095,6 +1102,7 @@ def getCandidateForms():
         else:
             return jsonify({"message", "No saved data"}), 404
     except Exception:
+        print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -1507,6 +1515,7 @@ def getLatestOrder():
             {"email": email, "isAgreement": False}, {"_id": 0})
         return jsonify(data)
     except Exception:
+        print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
 
@@ -1615,6 +1624,7 @@ def manualUploadDocuments():
                                              enc_filename))
 
                         except Exception:
+                            print(traceback.format_exc())
                             return jsonify({"message":
                                             "Some Error Occurred"}), 500
 
@@ -1756,6 +1766,7 @@ def uploadDocuments():
                                              enc_filename))
 
                         except Exception:
+                            print(traceback.format_exc())
                             return jsonify({"message":
                                             "Some Error Occurred"}), 500
 
@@ -1910,6 +1921,7 @@ def updateOrder():
         })
         return jsonify({"message": "Success"})
     except Exception:
+        print(traceback.format_exc())
         return jsonify({"message": "Some Error Occurred"}), 500
 
 
@@ -2059,9 +2071,11 @@ def uploadAgreement():
                 # requests.post(mailer_url+'send-mail',json=payload)
                 return jsonify({"message": "Success"})
             except Exception:
+                print(traceback.format_exc())
                 return jsonify({"message": "Service Error"}), 423
 
         except Exception:
+            print(traceback.format_exc())
             return jsonify({"message": "Some Error Occurred"}), 500
     return jsonify({"message": "Only PDF files allowed"}), 400
 
@@ -2178,6 +2192,7 @@ def saveBlog():
             photo.save(save_path)
             return jsonify({"message": "Success"})
         except Exception:
+            print(traceback.format_exc())
             return jsonify({"message": "Some Error Occurred"}), 500
     return jsonify({"message": "Only JPG/PNG files allowed"}), 400
 
@@ -2214,7 +2229,7 @@ def deleteBlog():
         os.remove(os.path.abspath(
             os.path.join(BLOG_PHOTO_FOLDER, data['photo'])))
     except Exception:
-        pass
+        print(traceback.format_exc())
     return jsonify({"message": "Success"})
 
 
@@ -2239,7 +2254,7 @@ def updateBlog():
             os.remove(os.path.abspath(
                 os.path.join(BLOG_PHOTO_FOLDER, oldBlog['photo'])))
         except Exception:
-            pass
+            print(traceback.format_exc())
         ext = photo.filename.lower().split(".")[-1]
         if ext not in ["jpg", "png"]:
             return jsonify({"message": "Only JPG/PNG files allowed"}), 400
@@ -2252,6 +2267,7 @@ def updateBlog():
             photo.save(save_path)
             newBlog.update({"photo": enc_filename})
         except Exception:
+            print(traceback.format_exc())
             return jsonify({"message": "Some Error Occurred"}), 500
     if not newBlog:
         return jsonify({"message": "No changes done."})
