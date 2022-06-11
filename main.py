@@ -180,9 +180,8 @@ def upsert_zoho_book_contact(client):
         {"email": client.get("email")},
         {"_id": 0}
     )
-    print("ZOHO SENT DATA: ", data)
     if zoho_contact:
-        data["contact_persons"][0].pop("email")
+        data["contact_persons"][0]["contact_person_id"] = zoho_contact.get("zohoContactPersonId")
         response = requests.put(
             contacts+"/"+zoho_contact["zohoId"],
             params={
@@ -193,6 +192,7 @@ def upsert_zoho_book_contact(client):
         ).json()
         print("Contact Updated: ", response)
         return response
+    print("ZOHO SENT DATA: ", data)
     response = requests.post(
         contacts,
         params={
@@ -206,7 +206,8 @@ def upsert_zoho_book_contact(client):
                 "email": client.get("email")
             }, {
                 "$set": {
-                    "zohoId": response["contact"]["contact_id"]
+                    "zohoId": response["contact"]["contact_id"],
+                    "zohoContactPersonId": response["contact"]["contact_persons"][0]["contact_person_id"]
                 }
             },
             upsert=True
