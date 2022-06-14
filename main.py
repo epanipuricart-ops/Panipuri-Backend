@@ -145,7 +145,7 @@ def upsert_zoho_book_contact(client):
     attn = client.get("title")+client.get("firstName")
     address = {
         "attention": attn,
-        "state": client.get("state", ""),
+        "state": client.get("state", "Odisha"),
         "country": "India"
     }
     if client.get("mobile"):
