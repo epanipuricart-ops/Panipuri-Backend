@@ -736,7 +736,7 @@ def getProfile():
                     data[ele] = obj[ele]
             return data
         else:
-            return jsonify({"message", "No data found"}), 404
+            return jsonify({"message": "No data found"}), 404
     except:
         return jsonify({"message": "Some error occurred"}), 500
 
@@ -909,7 +909,7 @@ def getAutofillInformation():
         if obj:
             return obj
         else:
-            return jsonify({"message", "No saved data"}), 404
+            return jsonify({"message": "No saved data"}), 404
     except Exception:
         print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
@@ -985,7 +985,7 @@ def getGeneralInformation():
         elif obj2:
             return obj2
         else:
-            return jsonify({"message", "No saved data"}), 404
+            return jsonify({"message": "No saved data"}), 404
     except Exception:
         print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
@@ -1101,7 +1101,7 @@ def getCandidateForms():
         if obj:
             return jsonify({"forms": list(obj)})
         else:
-            return jsonify({"message", "No saved data"}), 404
+            return jsonify({"message": "No saved data"}), 404
     except Exception:
         print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
