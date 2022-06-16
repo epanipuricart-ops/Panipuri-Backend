@@ -181,7 +181,8 @@ def upsert_zoho_book_contact(client):
         {"_id": 0}
     )
     if zoho_contact:
-        data["contact_persons"][0]["contact_person_id"] = zoho_contact.get("zohoContactPersonId")
+        data["contact_persons"][0]["contact_person_id"] = zoho_contact.get(
+            "zohoContactPersonId")
         response = requests.put(
             contacts+"/"+zoho_contact["zohoId"],
             params={
@@ -1074,6 +1075,73 @@ def saveGeneralForm():
                     {'$addToSet': {
                         'roles': "in_review"
                     }})
+        upsert_zoho_book_contact(data)
+        return jsonify({"message": "Successfully saved"})
+    except Exception:
+        print(traceback.format_exc())
+        return jsonify({"message": "Some error occurred"}), 500
+
+
+@app.route('/franchisee/v2/saveGeneralForm', methods=['POST'])
+@cross_origin()
+@verify_token
+def saveGeneralFormV2():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    valid_fields = [
+        "title", "firstName", "lastName", "mobile",
+        "gst_treatment", "franchisee_type",
+        "address", "state", "town", "pincode",
+        # Optional Fields
+        "purchase_type", "gst_no", "aadhar", "selected_towns"
+        "model_type", "master_type", "master_state", "master_town"]
+    data = {field: str(request.form.get(field, "")) for field in valid_fields}
+    data["email"] = email
+    if data["gst_treatment"] == "business_registered_regular":
+        data["gst_no"] = request.form.get('gst_no', '')
+        data["aadhar"] = ""
+    else:
+        data["gst_no"] = ""
+        # TODO: Upload aadhaar and set path
+        data["aadhar"] = request.form.get("aadhar", "")
+    if data["franchisee_type"] in ["unit", "multi"]:
+        if data["franchisee_type"] == "multi":
+            data["selected_towns"] = request.form.get("selected_towns", "")
+        data["model_type"] = request.form.get("model_type", "")
+        data["purchase_type"] = request.form.get("purchase_type", "")
+    elif data["franchisee_type"] == "master":
+        data["purchase_type"] = ""
+        data["model_type"] = ""
+        data["master_type"] = request.form.get("master_type", "")
+        if data["master_type"] == "state":
+            data["master_state"] = request.form.get("master_state", "")
+            data["master_town"] = ""
+        elif data["master_type"] == "town":
+            data["master_state"] = ""
+            data["master_town"] = request.form.get("master_town", "")
+    data["status"] = 0
+    data["formId"] = generate_custom_id()
+    data["email"] = email
+    data["isConverted"] = False
+    costing = mongo.db.costing.find_one({"uid": data["model_type"]})
+    if data["franchisee_type"] == "multi":
+        data["price"] = costing["subscriptionPrice"]
+    elif data["franchisee_type"] == "unit":
+        data["price"] = costing["price"]
+    data["createdDate"] = datetime.now()
+    try:
+        mongo.db.new_general_forms.update_one(
+            {
+                "email": data["email"],
+                "isConverted": False,
+            },
+            {"$set": data}, upsert=True
+        )
         upsert_zoho_book_contact(data)
         return jsonify({"message": "Successfully saved"})
     except Exception:
