@@ -645,6 +645,7 @@ def getStats():
 @cross_origin()
 def wizardGetStats():
     uid = request.args.get("customerId")
+    print("uid",uid)
     if True:
         available, data = sort(uid)
         if available:

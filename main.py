@@ -41,7 +41,7 @@ AGREEMENT_PDF_FOLDER = r'C:\agreement-pdf'
 BLOG_PHOTO_FOLDER = 'public/blog'
 MOU_PDF_PATH = "C:\\agreement-service\\mou-pdfs"
 # INTERMEDIATE_FOLDER = 'intermediate'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
 
 app = Flask(__name__, static_url_path='')
 
@@ -1095,60 +1095,152 @@ def saveGeneralFormV2():
     email = decoded['email']
     valid_fields = [
         "title", "firstName", "lastName", "mobile",
-        "gst_treatment", "franchisee_type",
-        "address", "state", "town", "pincode",
+        "gst_treatment", "billing_address","billing_pincode","shipping_address","shipping_pincode",
+        "franchise_type", "master_franchise_category", "state", "town", 
         # Optional Fields
-        "purchase_type", "gst_no", "aadhar", "selected_towns"
-        "model_type", "master_type", "master_state", "master_town"]
+        "purchase_type", "gst_no", "trade_name", "monthly_target", "annual_target",
+        "model_name", "model_extension", "tnc", "isSubmitted","isShippingAddressSame"]
     data = {field: str(request.form.get(field, "")) for field in valid_fields}
     data["email"] = email
+    data["isConverted"] = False
+    try:
+        result = mongo.db.application_forms.find_one(
+            {
+                "email": data["email"],
+                "isConverted": False,
+            }
+        )
+    except Exception:
+        print(traceback.format_exc())
+        return jsonify({"message": "Some error occurred"}), 500
+
+    if not result: 
+        data["createdDate"] = datetime.now()
+        data["formId"] = generate_custom_id()
+    data["location"] = ""
+    data["modifiedDate"] = datetime.now()
+    timestamp = int(round(time.time() * 1000))
     if data["gst_treatment"] == "business_registered_regular":
         data["gst_no"] = request.form.get('gst_no', '')
         data["aadhar"] = ""
     else:
         data["gst_no"] = ""
         # TODO: Upload aadhaar and set path
-        data["aadhar"] = request.form.get("aadhar", "")
-    if data["franchisee_type"] in ["unit", "multi"]:
-        if data["franchisee_type"] == "multi":
-            data["selected_towns"] = request.form.get("selected_towns", "")
-        data["model_type"] = request.form.get("model_type", "")
-        data["purchase_type"] = request.form.get("purchase_type", "")
-    elif data["franchisee_type"] == "master":
-        data["purchase_type"] = ""
-        data["model_type"] = ""
-        data["master_type"] = request.form.get("master_type", "")
-        if data["master_type"] == "state":
-            data["master_state"] = request.form.get("master_state", "")
-            data["master_town"] = ""
-        elif data["master_type"] == "town":
-            data["master_state"] = ""
-            data["master_town"] = request.form.get("master_town", "")
-    data["status"] = 0
-    data["formId"] = generate_custom_id()
-    data["email"] = email
-    data["isConverted"] = False
-    costing = mongo.db.costing.find_one({"uid": data["model_type"]})
-    if data["franchisee_type"] == "multi":
-        data["price"] = costing["subscriptionPrice"]
-    elif data["franchisee_type"] == "unit":
-        data["price"] = costing["price"]
-    data["createdDate"] = datetime.now()
+        file = request.files['file']
+        if file and allowed_file(file.filename):
+            filename_temp = secure_filename(file.filename)
+            ext = filename_temp.split('.')[1]
+            filename = 'aadhar'+ '_' + str(timestamp)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], str(filename)+'.'+ext)) 
+            data["aadhar"] = filename + '.' + ext
+    if data["isSubmitted"] == True:
+        data["status"] = "in_review"
+        mongo.db.clients.update_one(
+                    {'email': email},
+                    {'$addToSet': {
+                        'roles': "in_review"
+                    }})
+    else:
+        data["status"] = "not_required"
+    models = mongo.db.models.find_one({"franchise_type": data['franchise_type'], 
+                                            "master_franchise_category": data['master_franchise_category'],
+                                            "purchase_type": data['purchase_type'], "model_name":data['model_name'],
+                                            "extension": data["model_extension"]})
+    data["uid"] = models["uid"]
+    data["price"] = models["price"]
+    data["advance"] = models["advance"]
+    data["subscriptionPrice"] = models["subscriptionPrice"]
+    data["appPrice"] = models["appPrice"]
+    
     try:
-        mongo.db.new_general_forms.update_one(
+        mongo.db.application_forms.update_one(
             {
                 "email": data["email"],
                 "isConverted": False,
             },
             {"$set": data}, upsert=True
         )
-        upsert_zoho_book_contact(data)
+        #upsert_zoho_book_contact(data)
         return jsonify({"message": "Successfully saved"})
     except Exception:
         print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
+@app.route('/franchisee/v2/associatedMessage', methods=['GET'])
+@cross_origin()
+@verify_token
+def associatedMessage():
+    franchise_type = request.args.get('franchiseType')
+    if franchise_type == 'franchise':
+        state = request.args.get('state')
+        town = request.args.get('town')
+        state_data = mongo.db.master_franchise.find_one({"place":state, "type": "state" })
+        town_data = mongo.db.master_franchise.find_one({"place":town, "type": "town" })
+        if state_data and town_data:
+            return jsonify({"message": "You will be associated with " + str(town_data['town']) + " town franchise", "isSuccess": True})
+        elif state_data and not town_data:
+            return jsonify({"message": "You will be associated with " + str(state_data['state']) + " state franchise", "isSuccess": True})
+        elif not state_data and town_data:
+            return jsonify({"message": "You will be associated with " + str(town_data['town']) + " town franchise", "isSuccess": True})
+        else:
+            return jsonify({"message": "Franchise is available subject to conditions", "isSuccess": True})
+    else:
+        franchise_category = request.args.get('franchiseCategory')
+        if franchise_category == 'state franchise':
+            state = request.args.get('state')
+            state_data = mongo.db.master_franchise.find_one({"place":state, "type": "state"})
+            if state_data:
+                return jsonify({"message": "This Master Franchise is already taken", "isSuccess": False})
+            else:
+                return jsonify({"message": "Franchise is available subject to conditions", "isSuccess": True})
+        else:
+            town = request.args.get('town')
+            town_data = mongo.db.master_franchise.find_one({"place":town, "type": "town"})
+            if town_data:
+                return jsonify({"message": "This Master Franchise is already taken", "isSuccess": False})
+            else:
+                return jsonify({"message": "Franchise is available subject to conditions", "isSuccess": True})
+    
+@app.route('/franchisee/v2/getPricing', methods=['GET'])
+@cross_origin()
+@verify_token
+def getPricing():
+    franchise_type = request.args.get('franchiseType')
+    if franchise_type == 'franchise':
+        model_name = request.args.get('modelName')
+        extension = request.args.get('extension')
+        purchase_type = request.args.get('purchaseType')
+        franchise_data = mongo.db.models.find_one({"model_name": model_name, "extension": extension, 
+                                                   "purchase_type": purchase_type })
+        if franchise_data:
+            return jsonify({"price":franchise_data['price'], "appPrice": franchise_data["appPrice"] })
+        else:
+            return jsonify({"message": "No data found"}), 404
+    else:
+        franchise_category = request.args.get('franchiseCategory')
+        franchise_data = mongo.db.models.find_one({"master_franchise_category": franchise_category })
+        if franchise_data:
+            return jsonify({"price":franchise_data['price'], "appPrice": franchise_data["appPrice"] })
+        else:
+            return jsonify({"message": "No data found"}), 404   
 
+@app.route('/franchisee/v2/getCandidateForms', methods=['GET'])
+@cross_origin()
+@verify_token
+def getCandidateFormsV2():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = decoded['email']
+    data = mongo.db.application_forms.find_one({"email": email, "isConverted": False},{"_id": 0})
+    if data:
+        return jsonify(data)
+    else:
+        return jsonify({})
+    
 @app.route('/franchisee/getCandidateForms', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -1773,13 +1865,13 @@ def manualUploadDocuments():
         print("Register Device Response: ", response.text)
 
         # zoho sales order
-        zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
-        if zohoId and itemId:
-            send_sales_mail(
-                create_zoho_sales_order(
-                    zohoId.get("zohoId"),
-                    itemId.get("zoho_itemid")),
-                email)
+        # zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+        # if zohoId and itemId:
+        #     send_sales_mail(
+        #         create_zoho_sales_order(
+        #             zohoId.get("zohoId"),
+        #             itemId.get("zoho_itemid")),
+        #         email)
 
         return jsonify({"message": "Success"})
 
@@ -1915,13 +2007,13 @@ def uploadDocuments():
         print("Register Device Response: ", response.text)
 
         # zoho sales order
-        zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
-        if zohoId and itemId:
-            send_sales_mail(
-                create_zoho_sales_order(
-                    zohoId.get("zohoId"),
-                    itemId.get("zoho_itemid")),
-                email)
+        # zohoId = mongo.db.zoho_customer.find_one({"email": email}, {"_id": 0})
+        # if zohoId and itemId:
+        #     send_sales_mail(
+        #         create_zoho_sales_order(
+        #             zohoId.get("zohoId"),
+        #             itemId.get("zoho_itemid")),
+        #         email)
 
         return jsonify({"message": "Success"})
 
