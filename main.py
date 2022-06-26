@@ -1099,8 +1099,20 @@ def saveGeneralFormV2():
         "franchise_type", "master_franchise_category", "state", "town", 
         # Optional Fields
         "purchase_type", "gst_no", "trade_name", "monthly_target", "annual_target",
-        "model_name", "model_extension", "tnc", "isSubmitted","isShippingAddressSame"]
+        "model_name", "model_extension","isSubmitted","isShippingAddressSame", "tnc"]
     data = {field: str(request.form.get(field, "")) for field in valid_fields}
+    if data["isSubmitted"] == 'true':
+        data["isSubmitted"] = True
+    else:
+        data["isSubmitted"] = False
+    if data["isShippingAddressSame"] == 'true':
+        data["isShippingAddressSame"] = True
+    else:
+        data["isShippingAddressSame"] = False
+    if data["tnc"] == "true":
+        data["tnc"] = True
+    else:
+        data["tnc"] = False
     data["email"] = email
     data["isConverted"] = False
     try:
@@ -1126,13 +1138,15 @@ def saveGeneralFormV2():
     else:
         data["gst_no"] = ""
         # TODO: Upload aadhaar and set path
-        file = request.files['file']
-        if file and allowed_file(file.filename):
-            filename_temp = secure_filename(file.filename)
-            ext = filename_temp.split('.')[1]
-            filename = 'aadhar'+ '_' + str(timestamp)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], str(filename)+'.'+ext)) 
-            data["aadhar"] = filename + '.' + ext
+        if request.files.get('file'):
+            file = request.files['file']
+            if file and allowed_file(file.filename):
+                filename_temp = secure_filename(file.filename)
+                ext = filename_temp.split('.')[1]
+                filename = 'aadhar'+ '_' + str(timestamp)
+                file.save(os.path.join(app.config['UPLOAD_FOLDER'], str(filename)+'.'+ext)) 
+                data["aadhar"] = filename + '.' + ext
+    print(data["isSubmitted"])
     if data["isSubmitted"] == True:
         data["status"] = "in_review"
         mongo.db.clients.update_one(
@@ -1240,6 +1254,37 @@ def getCandidateFormsV2():
         return jsonify(data)
     else:
         return jsonify({})
+    
+@app.route('/franchisee/v2/getApplicationForms', methods=['GET'])
+@cross_origin()
+@verify_token
+def getApplicationFormsV2():
+    status = request.args.get('status')
+    if not status:
+        data = mongo.db.application_forms.find({},{"_id": 0})
+        return jsonify({"forms": list(data)})
+    else:
+        data = mongo.db.application_forms.find({"status": status},{"_id": 0})
+        return jsonify({"forms": list(data)})
+
+@app.route('/franchisee/v2/acceptApplicationForms', methods=['POST'])
+@cross_origin()
+@verify_token
+def acceptV2():
+    formId = request.json.get('formId')
+    location = request.json.get('location')
+    mongo.db.application_forms.update_one({"formId": formId}, 
+                                          {"$set": {"location": location, "status": "accepted"}})
+    return jsonify({"message": "Success"})
+
+@app.route('/franchisee/v2/rejectApplicationForms', methods=['POST'])
+@cross_origin()
+@verify_token
+def rejectV2():
+    formId = request.json.get('formId')
+    mongo.db.application_forms.update_one({"formId": formId}, 
+                                          {"$set": {"status": "rejected"}})
+    return jsonify({"message": "Success"})
     
 @app.route('/franchisee/getCandidateForms', methods=['GET'])
 @cross_origin()
