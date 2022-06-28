@@ -386,17 +386,37 @@ def create_zoho_retainer_invoice(customer_id, item_name, price):
             "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
         },
         json={
+            "branch_id": "221779000001392039",
             "customer_id": customer_id,
+            "contact_persons":["221779000002454003"],
+            "custom_fields": [{"value":"","customefield_id": "221779000001873001"}],
+            "terms": "Advance against order",
             "date": date.today().strftime("%Y-%m-%d"),
             "line_items": [{
                 "description": item_name,
                 "rate": price
-            }]
+            }],
+            "payment_options":{"payment_gateways":[{"gateway_name": "icici_eazypay"}]},
+            "template_id":"221779000000000241"
         }).json()
     if response.get("code") == 0:
         print(response)
         return response.get("retainerinvoice")
 
+def send_zoho_retainer_invoice(invoice_id):
+    response = requests.post(
+        "https://books.zoho.in/api/v3/retainerinvoices/"+str(invoice_id)+"/status/sent",
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        }
+    )
+    print(response)
+    return True
+    # if response.get("code") == 0:
+    #     return True
 
 def create_zoho_customer_payments(customer_id, reference_number):
     retainerinvoice = mongo.db.retainer_invoices.find_one(
@@ -1174,7 +1194,7 @@ def saveGeneralFormV2():
             },
             {"$set": data}, upsert=True
         )
-        #upsert_zoho_book_contact(data)
+        upsert_zoho_book_contact(data)
         return jsonify({"message": "Successfully saved"})
     except Exception:
         print(traceback.format_exc())
@@ -1273,8 +1293,38 @@ def getApplicationFormsV2():
 def acceptV2():
     formId = request.json.get('formId')
     location = request.json.get('location')
-    mongo.db.application_forms.update_one({"formId": formId}, 
+    data = mongo.db.application_forms.find_one_and_update({"formId": formId}, 
                                           {"$set": {"location": location, "status": "accepted"}})
+    email = data['email']
+    mongo.db.clients.update_one(
+        {"email": email}, 
+        {
+            "$pull":{'roles': 'in_review'}
+        })
+    mongo.db.clients.update_one(
+            {'email': email},
+            {
+                '$addToSet': {'roles': 'form_accepted'},
+            })
+    customer_id = mongo.db.zoho_customer.find_one({'email': email})
+    invoice = create_zoho_retainer_invoice(
+            customer_id['zohoId'], "Advance against order", float(data['advance']))
+    try:
+        time.sleep(1)
+        invoice_id = invoice.get('retainerinvoice_id')
+        invoice_number = invoice.get('retainerinvoice_number')
+        mongo.db.retainer_invoices.insert_one(
+                {
+                    "email": email,
+                    "invoice_id": invoice_id,
+                    "invoice_number": invoice_number,
+                    "customer_id": customer_id['zohoId'],
+                    "amount": float(data['advance']),
+                    "timestamp": int(round(time.time() * 1000)),
+                })
+        send_zoho_retainer_invoice(invoice_id)
+    except Exception:
+        print(traceback.format_exc())
     return jsonify({"message": "Success"})
 
 @app.route('/franchisee/v2/rejectApplicationForms', methods=['POST'])
@@ -1282,8 +1332,14 @@ def acceptV2():
 @verify_token
 def rejectV2():
     formId = request.json.get('formId')
-    mongo.db.application_forms.update_one({"formId": formId}, 
+    data = mongo.db.application_forms.find_one_and_update({"formId": formId}, 
                                           {"$set": {"status": "rejected"}})
+    email = data['email']
+    mongo.db.clients.update_one(
+        {"email": email}, 
+        {
+            "$pull":{'roles': 'in_review'}
+        })
     return jsonify({"message": "Success"})
     
 @app.route('/franchisee/getCandidateForms', methods=['GET'])
