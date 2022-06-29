@@ -148,14 +148,23 @@ def upsert_zoho_book_contact(client):
         "state": client.get("state", "Odisha"),
         "country": "India"
     }
+    shippingAddress = {
+        "attention": attn,
+        "state": client.get("state", "Odisha"),
+        "country": "India"
+    }
     if client.get("mobile"):
         address["phone"] = client.get("mobile")
     if client.get("town"):
         address["city"] = client.get("town")
-    if client.get("pincode"):
-        address["zip"] = int(client.get("pincode"))
-    if client.get("address"):
-        address["address"] = client.get("address")
+    if client.get("billing_pincode"):
+        address["zip"] = int(client.get("billing_pincode"))
+    if client.get("billing_address"):
+        address["address"] = client.get("billing_address")
+    if client.get("shipping_pincode"):
+        shippingAddress["zip"] = int(client.get("shipping_pincode"))
+    if client.get("shipping_address"):
+        shippingAddress["address"] = client.get("shipping_address")
     data = {
         "contact_name": name,
         "contact_persons": [
@@ -167,7 +176,7 @@ def upsert_zoho_book_contact(client):
                 "is_primary_contact": True,
             }],
         "billing_address": address,
-        "shipping_address": address
+        "shipping_address": shippingAddress
     }
     if client.get("mobile"):
         data["contact_persons"][0]["mobile"] = client.get("mobile")
