@@ -137,7 +137,15 @@ def refresh_zoho_access_token(force=False):
         ZOHO_TOKEN["access_token"] = response["access_token"]
         ZOHO_TOKEN["timestamp"] = time.time()
 
-
+def send_notification(name):
+    
+    headers = {
+            "Authorization": "Basic MjgtZ2U1NlptN3lMbTM1R1JQcUlwVk5XVmNycTVlcHVxRDFBdkRMSkVVbzo="}
+    requests.post("https://api.interakt.ai/v1/public/track/events/", json={
+                       "phoneNumber": "9437992433","event": "formReceived", "countryCode": "+91", "traits": {"name": name}}, headers=headers)
+    return True
+    
+    
 def upsert_zoho_book_contact(client):
     contacts = "https://books.zoho.in/api/v3/contacts"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
@@ -1225,6 +1233,7 @@ def saveGeneralFormV2():
             {"$set": data}, upsert=True
         )
         upsert_zoho_book_contact(data)
+        send_notification(data['firstName'])
         return jsonify({"message": "Successfully saved"})
     except Exception:
         print(traceback.format_exc())
@@ -3175,9 +3184,9 @@ def addToFavourites():
     itemId = mongo.db.costing.find_one({"uid": modelUid})
     if not zohoId or not itemId:
         return jsonify({"message": "Could not send estimate"})
-    send_estimate_mail(
-        create_zoho_estimate(zohoId.get("zohoId"), itemId.get("zoho_itemid")),
-        email)
+    
+    create_zoho_estimate(zohoId.get("zohoId"), itemId.get("zoho_itemid")),
+
     return jsonify({"message": "Success"})
 
 
