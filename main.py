@@ -376,7 +376,24 @@ def create_zoho_sales_order(customer_id, item_id):
         return response.get("salesorder").get("salesorder_id")
 
 
+def get_contact_persons(customer_id):
+    response = requests.get(
+        "https://books.zoho.in/api/v3/contacts/"+str(customer_id),
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        }).json()
+    if response.get("code") == 0:
+        print(response)
+        contact_persons = response['contact']['contact_persons']
+        print(contact_persons)
+        return contact_persons[0]["contact_person_id"]
+
+
 def create_zoho_retainer_invoice(customer_id, item_name, price):
+    contact_person_id = get_contact_persons(customer_id)
     response = requests.post(
         "https://books.zoho.in/api/v3/retainerinvoices",
         params={
@@ -388,24 +405,26 @@ def create_zoho_retainer_invoice(customer_id, item_name, price):
         json={
             "branch_id": "221779000001392039",
             "customer_id": customer_id,
-            "contact_persons":["221779000002454003"],
-            "custom_fields": [{"value":"","customefield_id": "221779000001873001"}],
+            "contact_persons": [str(contact_person_id)],
+            "custom_fields": [{"value": "", "customefield_id": "221779000001873001"}],
             "terms": "Advance against order",
             "date": date.today().strftime("%Y-%m-%d"),
             "line_items": [{
                 "description": item_name,
                 "rate": price
             }],
-            "payment_options":{"payment_gateways":[{"gateway_name": "icici_eazypay"}]},
-            "template_id":"221779000000000241"
+            "payment_options": {"payment_gateways": [{"gateway_name": "icici_eazypay"}]},
+            "template_id": "221779000000000241"
         }).json()
     if response.get("code") == 0:
         print(response)
         return response.get("retainerinvoice")
 
+
 def send_zoho_retainer_invoice(invoice_id):
     response = requests.post(
-        "https://books.zoho.in/api/v3/retainerinvoices/"+str(invoice_id)+"/status/sent",
+        "https://books.zoho.in/api/v3/retainerinvoices/" +
+        str(invoice_id)+"/status/sent",
         params={
             "organization_id": cfg.ZohoConfig.get("organization_id")
         },
@@ -417,6 +436,7 @@ def send_zoho_retainer_invoice(invoice_id):
     return True
     # if response.get("code") == 0:
     #     return True
+
 
 def create_zoho_customer_payments(customer_id, reference_number):
     retainerinvoice = mongo.db.retainer_invoices.find_one(
@@ -1115,11 +1135,11 @@ def saveGeneralFormV2():
     email = decoded['email']
     valid_fields = [
         "title", "firstName", "lastName", "mobile",
-        "gst_treatment", "billing_address","billing_pincode","shipping_address","shipping_pincode",
-        "franchise_type", "master_franchise_category", "state", "town", 
+        "gst_treatment", "billing_address", "billing_pincode", "shipping_address", "shipping_pincode",
+        "franchise_type", "master_franchise_category", "state", "town",
         # Optional Fields
         "purchase_type", "gst_no", "trade_name", "monthly_target", "annual_target",
-        "model_name", "model_extension","isSubmitted","isShippingAddressSame", "tnc"]
+        "model_name", "model_extension", "isSubmitted", "isShippingAddressSame", "tnc"]
     data = {field: str(request.form.get(field, "")) for field in valid_fields}
     if data["isSubmitted"] == 'true':
         data["isSubmitted"] = True
@@ -1146,7 +1166,7 @@ def saveGeneralFormV2():
         print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
-    if not result: 
+    if not result:
         data["createdDate"] = datetime.now()
         data["formId"] = generate_custom_id()
     data["location"] = ""
@@ -1163,29 +1183,30 @@ def saveGeneralFormV2():
             if file and allowed_file(file.filename):
                 filename_temp = secure_filename(file.filename)
                 ext = filename_temp.split('.')[1]
-                filename = 'aadhar'+ '_' + str(timestamp)
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], str(filename)+'.'+ext)) 
+                filename = 'aadhar' + '_' + str(timestamp)
+                file.save(os.path.join(
+                    app.config['UPLOAD_FOLDER'], str(filename)+'.'+ext))
                 data["aadhar"] = filename + '.' + ext
     print(data["isSubmitted"])
     if data["isSubmitted"] == True:
         data["status"] = "in_review"
         mongo.db.clients.update_one(
-                    {'email': email},
-                    {'$addToSet': {
-                        'roles': "in_review"
-                    }})
+            {'email': email},
+            {'$addToSet': {
+                'roles': "in_review"
+            }})
     else:
         data["status"] = "not_required"
-    models = mongo.db.models.find_one({"franchise_type": data['franchise_type'], 
-                                            "master_franchise_category": data['master_franchise_category'],
-                                            "purchase_type": data['purchase_type'], "model_name":data['model_name'],
-                                            "extension": data["model_extension"]})
+    models = mongo.db.models.find_one({"franchise_type": data['franchise_type'],
+                                       "master_franchise_category": data['master_franchise_category'],
+                                       "purchase_type": data['purchase_type'], "model_name": data['model_name'],
+                                       "extension": data["model_extension"]})
     data["uid"] = models["uid"]
     data["price"] = models["price"]
     data["advance"] = models["advance"]
     data["subscriptionPrice"] = models["subscriptionPrice"]
     data["appPrice"] = models["appPrice"]
-    
+
     try:
         mongo.db.application_forms.update_one(
             {
@@ -1200,6 +1221,7 @@ def saveGeneralFormV2():
         print(traceback.format_exc())
         return jsonify({"message": "Some error occurred"}), 500
 
+
 @app.route('/franchisee/v2/associatedMessage', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -1208,8 +1230,10 @@ def associatedMessage():
     if franchise_type == 'franchise':
         state = request.args.get('state')
         town = request.args.get('town')
-        state_data = mongo.db.master_franchise.find_one({"place":state, "type": "state" })
-        town_data = mongo.db.master_franchise.find_one({"place":town, "type": "town" })
+        state_data = mongo.db.master_franchise.find_one(
+            {"place": state, "type": "state"})
+        town_data = mongo.db.master_franchise.find_one(
+            {"place": town, "type": "town"})
         if state_data and town_data:
             return jsonify({"message": "You will be associated with " + str(town_data['town']) + " town franchise", "isSuccess": True})
         elif state_data and not town_data:
@@ -1222,19 +1246,22 @@ def associatedMessage():
         franchise_category = request.args.get('franchiseCategory')
         if franchise_category == 'state franchise':
             state = request.args.get('state')
-            state_data = mongo.db.master_franchise.find_one({"place":state, "type": "state"})
+            state_data = mongo.db.master_franchise.find_one(
+                {"place": state, "type": "state"})
             if state_data:
                 return jsonify({"message": "This Master Franchise is already taken", "isSuccess": False})
             else:
                 return jsonify({"message": "Franchise is available subject to conditions", "isSuccess": True})
         else:
             town = request.args.get('town')
-            town_data = mongo.db.master_franchise.find_one({"place":town, "type": "town"})
+            town_data = mongo.db.master_franchise.find_one(
+                {"place": town, "type": "town"})
             if town_data:
                 return jsonify({"message": "This Master Franchise is already taken", "isSuccess": False})
             else:
                 return jsonify({"message": "Franchise is available subject to conditions", "isSuccess": True})
-    
+
+
 @app.route('/franchisee/v2/getPricing', methods=['GET'])
 @cross_origin()
 @verify_token
@@ -1244,19 +1271,21 @@ def getPricing():
         model_name = request.args.get('modelName')
         extension = request.args.get('extension')
         purchase_type = request.args.get('purchaseType')
-        franchise_data = mongo.db.models.find_one({"model_name": model_name, "extension": extension, 
-                                                   "purchase_type": purchase_type })
+        franchise_data = mongo.db.models.find_one({"model_name": model_name, "extension": extension,
+                                                   "purchase_type": purchase_type})
         if franchise_data:
-            return jsonify({"price":franchise_data['price'], "appPrice": franchise_data["appPrice"] })
+            return jsonify({"price": franchise_data['price'], "appPrice": franchise_data["appPrice"]})
         else:
             return jsonify({"message": "No data found"}), 404
     else:
         franchise_category = request.args.get('franchiseCategory')
-        franchise_data = mongo.db.models.find_one({"master_franchise_category": franchise_category })
+        franchise_data = mongo.db.models.find_one(
+            {"master_franchise_category": franchise_category})
         if franchise_data:
-            return jsonify({"price":franchise_data['price'], "appPrice": franchise_data["appPrice"] })
+            return jsonify({"price": franchise_data['price'], "appPrice": franchise_data["appPrice"]})
         else:
-            return jsonify({"message": "No data found"}), 404   
+            return jsonify({"message": "No data found"}), 404
+
 
 @app.route('/franchisee/v2/getCandidateForms', methods=['GET'])
 @cross_origin()
@@ -1269,23 +1298,26 @@ def getCandidateFormsV2():
                              "verify_aud": False
                          })
     email = decoded['email']
-    data = mongo.db.application_forms.find_one({"email": email, "isConverted": False},{"_id": 0})
+    data = mongo.db.application_forms.find_one(
+        {"email": email, "isConverted": False}, {"_id": 0})
     if data:
         return jsonify(data)
     else:
         return jsonify({})
-    
+
+
 @app.route('/franchisee/v2/getApplicationForms', methods=['GET'])
 @cross_origin()
 @verify_token
 def getApplicationFormsV2():
     status = request.args.get('status')
     if not status:
-        data = mongo.db.application_forms.find({},{"_id": 0})
+        data = mongo.db.application_forms.find({}, {"_id": 0})
         return jsonify({"forms": list(data)})
     else:
-        data = mongo.db.application_forms.find({"status": status},{"_id": 0})
+        data = mongo.db.application_forms.find({"status": status}, {"_id": 0})
         return jsonify({"forms": list(data)})
+
 
 @app.route('/franchisee/v2/acceptApplicationForms', methods=['POST'])
 @cross_origin()
@@ -1293,55 +1325,80 @@ def getApplicationFormsV2():
 def acceptV2():
     formId = request.json.get('formId')
     location = request.json.get('location')
-    data = mongo.db.application_forms.find_one_and_update({"formId": formId}, 
-                                          {"$set": {"location": location, "status": "accepted"}})
+    data = mongo.db.application_forms.find_one_and_update({"formId": formId},
+                                                          {"$set": {"location": location, "status": "accepted"}})
     email = data['email']
     mongo.db.clients.update_one(
-        {"email": email}, 
+        {"email": email},
         {
-            "$pull":{'roles': 'in_review'}
+            "$pull": {'roles': 'in_review'}
         })
     mongo.db.clients.update_one(
-            {'email': email},
-            {
-                '$addToSet': {'roles': 'form_accepted'},
-            })
+        {'email': email},
+        {
+            '$addToSet': {'roles': 'form_accepted'},
+        })
     customer_id = mongo.db.zoho_customer.find_one({'email': email})
-    invoice = create_zoho_retainer_invoice(
-            customer_id['zohoId'], "Advance against order", float(data['advance']))
+
     try:
+        invoice = create_zoho_retainer_invoice(
+            customer_id['zohoId'], "Advance against order", float(data['advance']))
         time.sleep(1)
         invoice_id = invoice.get('retainerinvoice_id')
         invoice_number = invoice.get('retainerinvoice_number')
         mongo.db.retainer_invoices.insert_one(
-                {
-                    "email": email,
-                    "invoice_id": invoice_id,
-                    "invoice_number": invoice_number,
-                    "customer_id": customer_id['zohoId'],
-                    "amount": float(data['advance']),
-                    "timestamp": int(round(time.time() * 1000)),
-                })
+            {
+                "email": email,
+                "invoice_id": invoice_id,
+                "invoice_number": invoice_number,
+                "customer_id": customer_id['zohoId'],
+                "amount": float(data['advance']),
+                "invoice_status": "unpaid",
+                "timestamp": int(round(time.time() * 1000)),
+            })
         send_zoho_retainer_invoice(invoice_id)
     except Exception:
         print(traceback.format_exc())
     return jsonify({"message": "Success"})
+
 
 @app.route('/franchisee/v2/rejectApplicationForms', methods=['POST'])
 @cross_origin()
 @verify_token
 def rejectV2():
     formId = request.json.get('formId')
-    data = mongo.db.application_forms.find_one_and_update({"formId": formId}, 
-                                          {"$set": {"status": "rejected"}})
+    data = mongo.db.application_forms.find_one_and_update({"formId": formId},
+                                                          {"$set": {"status": "rejected"}})
     email = data['email']
     mongo.db.clients.update_one(
-        {"email": email}, 
+        {"email": email},
         {
-            "$pull":{'roles': 'in_review'}
+            "$pull": {'roles': 'in_review'}
         })
     return jsonify({"message": "Success"})
-    
+
+
+@app.route('/franchisee/v2/getRetainerInvoices', methods=['GET'])
+@cross_origin()
+@verify_token
+def getRetainerInvoices():
+    data = mongo.db.retainer_invoices.find({}, {"_id": 0})
+    if data:
+        return jsonify({"retainerInvoices": list(data)})
+    else:
+        return jsonify({"retainerInvoices": []})
+
+
+@app.route('/franchisee/v2/markAsPaid', methods=['POST'])
+@cross_origin()
+@verify_token
+def markAsPaid():
+    invoice_id = request.json.get("invoiceId")
+    mongo.db.retainer_invoices.update_one({"invoice_id": invoice_id}, {
+                                          "$set": {"invoice_status": "paid"}})
+    return jsonify({"message": "Success"})
+
+
 @app.route('/franchisee/getCandidateForms', methods=['GET'])
 @cross_origin()
 @verify_token
