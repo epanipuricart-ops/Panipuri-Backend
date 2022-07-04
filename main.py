@@ -137,17 +137,18 @@ def refresh_zoho_access_token(force=False):
         ZOHO_TOKEN["access_token"] = response["access_token"]
         ZOHO_TOKEN["timestamp"] = time.time()
 
+
 def send_notification(name):
-    
+
     headers = {
-            "Authorization": "Basic MjgtZ2U1NlptN3lMbTM1R1JQcUlwVk5XVmNycTVlcHVxRDFBdkRMSkVVbzo="}
+        "Authorization": "Basic MjgtZ2U1NlptN3lMbTM1R1JQcUlwVk5XVmNycTVlcHVxRDFBdkRMSkVVbzo="}
     requests.post("https://api.interakt.ai/v1/public/track/events/", json={
-                       "phoneNumber": "9437992433","event": "formReceived", "countryCode": "+91", "traits": {"name": name}}, headers=headers)
+        "phoneNumber": "9437992433", "event": "formReceived", "countryCode": "+91", "traits": {"name": name}}, headers=headers)
     requests.post("https://api.interakt.ai/v1/public/track/events/", json={
-                       "phoneNumber": "7366904004","event": "formReceived", "countryCode": "+91", "traits": {"name": name}}, headers=headers)
+        "phoneNumber": "7366904004", "event": "formReceived", "countryCode": "+91", "traits": {"name": name}}, headers=headers)
     return True
-    
-    
+
+
 def upsert_zoho_book_contact(client):
     contacts = "https://books.zoho.in/api/v3/contacts"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
@@ -1331,10 +1332,12 @@ def getCandidateFormsV2():
 def getApplicationFormsV2():
     status = request.args.get('status')
     if not status:
-        data = mongo.db.application_forms.find({}, {"_id": 0})
+        data = mongo.db.application_forms.find(
+            {}, {"_id": 0}).sort("modifiedDate", -1)
         return jsonify({"forms": list(data)})
     else:
-        data = mongo.db.application_forms.find({"status": status}, {"_id": 0})
+        data = mongo.db.application_forms.find(
+            {"status": status}, {"_id": 0}).sort("modifiedDate", -1)
         return jsonify({"forms": list(data)})
 
 
@@ -1377,7 +1380,7 @@ def acceptV2():
                 "timestamp": int(round(time.time() * 1000)),
             })
         send_zoho_retainer_invoice(invoice_id)
-        
+
     except Exception:
         print(traceback.format_exc())
     return jsonify({"message": "Success"})
@@ -1403,7 +1406,8 @@ def rejectV2():
 @cross_origin()
 @verify_token
 def getRetainerInvoices():
-    data = mongo.db.retainer_invoices.find({}, {"_id": 0})
+    data = mongo.db.retainer_invoices.find(
+        {}, {"_id": 0}).sort("timestamp", -1)
     if data:
         return jsonify({"retainerInvoices": list(data)})
     else:
@@ -1416,26 +1420,28 @@ def getRetainerInvoices():
 def markAsPaid():
     invoice_id = request.json.get("invoiceId")
     data = mongo.db.retainer_invoices.find_one_and_update({"invoice_id": invoice_id}, {
-                                          "$set": {"invoice_status": "paid"}})
-    email = mongo.db.zoho_customer.find_one({"zohoId": data["customer_id"]})['email']
+        "$set": {"invoice_status": "paid"}})
+    email = mongo.db.zoho_customer.find_one(
+        {"zohoId": data["customer_id"]})['email']
     mongo.db.clients.update_one(
-            {'email': email},
-            {
-                '$pull': {'roles': 'form_accepted'},
-            })
+        {'email': email},
+        {
+            '$pull': {'roles': 'form_accepted'},
+        })
     mongo.db.clients.update_one(
-            {'email': email},
-            {
-                '$addToSet': {'roles': 'paid_subscriber'},
-            })
+        {'email': email},
+        {
+            '$addToSet': {'roles': 'paid_subscriber'},
+        })
     mongo.db.clients.update_one(
-            {'email': email},
-            {
-                '$addToSet': {'roles': 'franchisee'},
-            })
-    
-    form_data = mongo.db.application_forms.find_one({"formId": data["form_id"]})
-    
+        {'email': email},
+        {
+            '$addToSet': {'roles': 'franchisee'},
+        })
+
+    form_data = mongo.db.application_forms.find_one(
+        {"formId": data["form_id"]})
+
     order_id = mongo.db.order_num.find_one({"id": 1})['order_id']
     date = int(round(time.time() * 1000))
     mongo.db.orders.insert_one({
@@ -1448,25 +1454,25 @@ def markAsPaid():
         "transaction_id": "",
         "deliveryDate": "",
         "isAgreement": False
-        })
-    
+    })
+
     device_id = get_last_id(form_data['town'])
-    
+
     if form_data['purchase_type'] == 'subscription':
         isSubscription = True
     else:
         isSubscription = False
-        
+
     mongo.db.device_ids.insert_one({
-            "email": email,
-            "device_id": device_id,
-            "state": form_data["state"],
-            "town": form_data["town"],
-            "location": data.get("location"),
-            "order_id": "EK-" + str(order_id),
-            "isSubscription": isSubscription
-        })
-    
+        "email": email,
+        "device_id": device_id,
+        "state": form_data["state"],
+        "town": form_data["town"],
+        "location": data.get("location"),
+        "order_id": "EK-" + str(order_id),
+        "isSubscription": isSubscription
+    })
+
     mongo.db.order_history.insert_one({
         "order_id": order_id,
         "status": "placed",
@@ -1476,7 +1482,7 @@ def markAsPaid():
                                   {"$set": {
                                       "order_id": order_id + 1
                                   }})
-    
+
     # create Default Menu
     default_menu = cfg.DefaultMenu.copy()
     for category in default_menu["menu"]:
@@ -1484,25 +1490,25 @@ def markAsPaid():
         for item in category["items"]:
             item.update({"itemId": generate_custom_id()})
     mongo.db.menu.update_one({"cartId": device_id},
-                                 {"$set": default_menu}, upsert=True)
+                             {"$set": default_menu}, upsert=True)
 
     # trigger iot register api
     iot_type = mongo.db.models.find_one({"uid": form_data["uid"]})["iot_type"]
     name = form_data.get("firstName", "") + " " + form_data.get("lastName", "")
-    
+
     iot_data = {
-            "type": iot_type,
-            "uid": device_id,
-            "ownerType": 1,
-            "owner": name.strip(),
-            "address": ", ".join([form_data[key]
-                                  for key in ["location", "town", "state"]])
-        }
+        "type": iot_type,
+        "uid": device_id,
+        "ownerType": 1,
+        "owner": name.strip(),
+        "address": ", ".join([form_data[key]
+                              for key in ["location", "town", "state"]])
+    }
     print(iot_data)
     response = requests.post(
         iot_api_url+"/wizard/registerDevice", json=iot_data)
     print(response)
-    
+
     return jsonify({"message": "Success"})
 
 
@@ -3273,7 +3279,7 @@ def addToFavourites():
     itemId = mongo.db.costing.find_one({"uid": modelUid})
     if not zohoId or not itemId:
         return jsonify({"message": "Could not send estimate"})
-    
+
     create_zoho_estimate(zohoId.get("zohoId"), itemId.get("zoho_itemid")),
 
     return jsonify({"message": "Success"})
