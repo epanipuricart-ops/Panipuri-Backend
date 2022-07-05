@@ -184,7 +184,8 @@ def upsert_zoho_book_contact(client):
                 "first_name": client.get("firstName"),
                 "last_name": client.get("lastName"),
                 "email": client.get("email"),
-                "is_primary_contact": True,
+                "is_primary_contact": True
+                
             }],
         "billing_address": address,
         "shipping_address": shippingAddress
@@ -196,6 +197,8 @@ def upsert_zoho_book_contact(client):
         data["gst_no"] = client.get("gst_no")
     if client.get("gst_treatment"):
         data["gst_treatment"] = client.get("gst_treatment")
+        data["company_name"] = client.get("company_name"),
+        data["customer_sub_type"] = client.get("customer_sub_type")
     zoho_contact = mongo.db.zoho_customer.find_one(
         {"email": client.get("email")},
         {"_id": 0}
@@ -1175,6 +1178,13 @@ def saveGeneralFormV2():
         data["tnc"] = False
     data["email"] = email
     data["isConverted"] = False
+    if data["gst_treatment"] == "business_registered_regular":
+        data["customer_sub_type"] = "business"
+        data["company_name"] = data["trade_name"]
+    else:
+        data["customer_sub_type"] = "individual"
+        data["company_name"] = ""
+        
     try:
         result = mongo.db.application_forms.find_one(
             {
@@ -1439,8 +1449,8 @@ def markAsPaid():
             '$addToSet': {'roles': 'franchisee'},
         })
 
-    form_data = mongo.db.application_forms.find_one(
-        {"formId": data["form_id"]})
+    form_data = mongo.db.application_forms.find_one_and_update(
+        {"formId": data["form_id"]}, {"$set": {"isConverted": True}})
 
     order_id = mongo.db.order_num.find_one({"id": 1})['order_id']
     date = int(round(time.time() * 1000))
