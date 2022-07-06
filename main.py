@@ -185,10 +185,11 @@ def upsert_zoho_book_contact(client):
                 "last_name": client.get("lastName"),
                 "email": client.get("email"),
                 "is_primary_contact": True
-                
+
             }],
         "billing_address": address,
-        "shipping_address": shippingAddress
+        "shipping_address": shippingAddress,
+        "place_of_contact": address["state"]
     }
     if client.get("mobile"):
         data["contact_persons"][0]["mobile"] = client.get("mobile")
@@ -1184,7 +1185,7 @@ def saveGeneralFormV2():
     else:
         data["customer_sub_type"] = "individual"
         data["company_name"] = ""
-        
+
     try:
         result = mongo.db.application_forms.find_one(
             {
