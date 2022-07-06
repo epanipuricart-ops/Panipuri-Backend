@@ -189,7 +189,7 @@ def upsert_zoho_book_contact(client):
             }],
         "billing_address": address,
         "shipping_address": shippingAddress,
-        "place_of_contact": address["state"]
+        # "place_of_contact": address["state"]
     }
     if client.get("mobile"):
         data["contact_persons"][0]["mobile"] = client.get("mobile")
@@ -198,12 +198,14 @@ def upsert_zoho_book_contact(client):
         data["gst_no"] = client.get("gst_no")
     if client.get("gst_treatment"):
         data["gst_treatment"] = client.get("gst_treatment")
-        data["company_name"] = client.get("company_name"),
+        data["company_name"] = client.get("company_name")
         data["customer_sub_type"] = client.get("customer_sub_type")
     zoho_contact = mongo.db.zoho_customer.find_one(
         {"email": client.get("email")},
         {"_id": 0}
     )
+
+    print("ZOHO SENT DATA: ", data)
     if zoho_contact:
         data["contact_persons"][0]["contact_person_id"] = zoho_contact.get(
             "zohoContactPersonId")
@@ -217,7 +219,6 @@ def upsert_zoho_book_contact(client):
         ).json()
         print("Contact Updated: ", response)
         return response
-    print("ZOHO SENT DATA: ", data)
     response = requests.post(
         contacts,
         params={
