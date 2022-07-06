@@ -97,6 +97,47 @@ DefaultMenu = {
 }
 
 
+STATE_CODES = {
+    "Andhra Pradesh": "AD",
+    "Arunachal Pradesh": "AR",
+    "Assam": "AS",
+    "Bihar": "BR",
+    "Chattisgarh":	"CG",
+    "Delhi": "DL",
+    "Goa": "GA",
+    "Gujarat": "GJ",
+    "Haryana": "HR",
+    "Himachal Pradesh": "HP",
+    "Jammu and Kashmir": "JK",
+    "Jharkhand": "JH",
+    "Karnataka": "KA",
+    "Kerala": "KL",
+    "Lakshadweep Islands": "LD",
+    "Madhya Pradesh": "MP",
+    "Maharashtra": "MH",
+    "Manipur": "MN",
+    "Meghalaya": "ML",
+    "Mizoram": "MZ",
+    "Nagaland": "NL",
+    "Odisha": "OD",
+    "Pondicherry": "PY",
+    "Punjab": "PB",
+    "Rajasthan": "RJ",
+    "Sikkim": "SK",
+    "Tamil Nadu": "TN",
+    "Telangana": "TS",
+    "Tripura": "TR",
+    "Uttar Pradesh": "UP",
+    "Uttarakhand": "UK",
+    "West Bengal": "WB",
+    "Andaman and Nicobar Islands": "AN",
+    "Chandigarh": "CH",
+    "Dadra & Nagar Haveli and Daman & Diu": "DNHDD",
+    "Ladakh": "LA",
+    "Other Territory": "OT"
+
+}
+
 estimate_mail_body = """
 <div style="background: #fbfbfb;">
     <div>

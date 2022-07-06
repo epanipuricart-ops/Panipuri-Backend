@@ -189,7 +189,7 @@ def upsert_zoho_book_contact(client):
             }],
         "billing_address": address,
         "shipping_address": shippingAddress,
-        # "place_of_contact": address["state"]
+        "place_of_contact": cfg.STATE_CODES.get(address["state"], "OD")
     }
     if client.get("mobile"):
         data["contact_persons"][0]["mobile"] = client.get("mobile")
