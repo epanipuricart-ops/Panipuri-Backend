@@ -98,11 +98,14 @@ DefaultMenu = {
 
 
 STATE_CODES = {
+    "Andaman and Nicobar Islands": "OT",
     "Andhra Pradesh": "AD",
     "Arunachal Pradesh": "AR",
     "Assam": "AS",
     "Bihar": "BR",
-    "Chattisgarh":	"CG",
+    "Chandigarh": "OT",
+    "Chhattisgarh": "CG",
+    "Dadra and Nagar Haveli": "OT",
     "Delhi": "DL",
     "Goa": "GA",
     "Gujarat": "GJ",
@@ -112,7 +115,6 @@ STATE_CODES = {
     "Jharkhand": "JH",
     "Karnataka": "KA",
     "Kerala": "KL",
-    "Lakshadweep Islands": "LD",
     "Madhya Pradesh": "MP",
     "Maharashtra": "MH",
     "Manipur": "MN",
@@ -120,22 +122,15 @@ STATE_CODES = {
     "Mizoram": "MZ",
     "Nagaland": "NL",
     "Odisha": "OD",
-    "Pondicherry": "PY",
+    "Puducherry": "PY",
     "Punjab": "PB",
     "Rajasthan": "RJ",
-    "Sikkim": "SK",
     "Tamil Nadu": "TN",
     "Telangana": "TS",
     "Tripura": "TR",
     "Uttar Pradesh": "UP",
     "Uttarakhand": "UK",
-    "West Bengal": "WB",
-    "Andaman and Nicobar Islands": "AN",
-    "Chandigarh": "CH",
-    "Dadra & Nagar Haveli and Daman & Diu": "DNHDD",
-    "Ladakh": "LA",
-    "Other Territory": "OT"
-
+    "West Bengal": "WB"
 }
 
 estimate_mail_body = """
