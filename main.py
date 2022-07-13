@@ -1259,7 +1259,6 @@ def saveGeneralFormV2():
 @verify_token
 def associatedMessage():
     franchise_type = request.args.get('franchiseType')
-    print(franchise_type)
     if franchise_type == 'franchise':
         state = request.args.get('state')
         town = request.args.get('town')
@@ -1268,11 +1267,11 @@ def associatedMessage():
         town_data = mongo.db.master_franchise.find_one(
             {"place": town, "type": "town"})
         if state_data and town_data:
-            return jsonify({"message": "You will be associated with " + str(town_data['town']) + " town franchise", "isSuccess": True})
+            return jsonify({"message": "You will be associated with " + str(town_data['place']) + " town franchise", "isSuccess": True})
         elif state_data and not town_data:
-            return jsonify({"message": "You will be associated with " + str(state_data['state']) + " state franchise", "isSuccess": True})
+            return jsonify({"message": "You will be associated with " + str(state_data['place']) + " state franchise", "isSuccess": True})
         elif not state_data and town_data:
-            return jsonify({"message": "You will be associated with " + str(town_data['town']) + " town franchise", "isSuccess": True})
+            return jsonify({"message": "You will be associated with " + str(town_data['place']) + " town franchise", "isSuccess": True})
         else:
             return jsonify({"message": "Franchise is available subject to conditions", "isSuccess": True})
     else:

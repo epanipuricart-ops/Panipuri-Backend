@@ -2,7 +2,7 @@
     "apiKey": "AIzaSyDSsD1Iys2QQLQdXpKD13hq1MpA_Wtj6ew",
     "authDomain": "e-panipuricart.firebaseapp.com",
     "projectId": "e-panipuricart",
-    "databaseUrl": "",
+    "databaseURL": "",
     "storageBucket": "e-panipuricart.appspot.com",
     "messagingSenderId": "875772694959",
     "appId": "1:875772694959:web:244c9c01a4a5812d909f5a",
