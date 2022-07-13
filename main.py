@@ -1259,6 +1259,7 @@ def saveGeneralFormV2():
 @verify_token
 def associatedMessage():
     franchise_type = request.args.get('franchiseType')
+    print(franchise_type)
     if franchise_type == 'franchise':
         state = request.args.get('state')
         town = request.args.get('town')

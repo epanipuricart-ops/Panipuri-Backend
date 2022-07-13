@@ -652,7 +652,21 @@ def wizardGetStats():
             return jsonify({"result": data})
         else:
             return jsonify({"message": "No record found"}), 403
+        
+@app.route("/wizard/saveTimings", methods=["POST"])
+@cross_origin()
+def saveTimings():
+    uid = request.json.get("customerId")
+    data = request.json.get("data")
+    mongo.db.timings.update_one({"device_id": uid}, {"$set": {"data": data}},upsert=True)
+    return jsonify({"message": "Success"})
 
+@app.route("/wizard/getTimings", methods=["GET"])
+@cross_origin()
+def getTimings():
+    uid = request.args.get("customerId")
+    data = mongo.db.timings.find_one({"device_id": uid}, {"_id": 0})
+    return jsonify({"data": data})
 
 @app.route("/getToday", methods=["GET", "POST"])
 @cross_origin()
