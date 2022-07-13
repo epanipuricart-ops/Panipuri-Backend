@@ -19,6 +19,7 @@ import pyrebase
 from firebase_admin import credentials, auth
 import jwt
 from functools import wraps
+import pandas as pd
 import requests
 import json
 import random
@@ -150,6 +151,7 @@ def send_notification(name):
 
 
 def upsert_zoho_book_contact(client):
+    df = pd.read_excel(r'C:\Users\Administrator\Desktop\EPanipuriKartz\Backend\config\STATE AND STATE CODES.xlsx')
     contacts = "https://books.zoho.in/api/v3/contacts"
     header = {"Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]}
     name = (client.get("firstName") + " " + client.get("lastName")).strip()
@@ -164,6 +166,8 @@ def upsert_zoho_book_contact(client):
         "state": client.get("state", "Odisha"),
         "country": "India"
     }
+    state_code = str(df[df['STATE'] == shippingAddress.get("state")]['STATE CODES'].iloc[0])
+    print(state_code)
     if client.get("mobile"):
         address["phone"] = client.get("mobile")
     if client.get("town"):
@@ -189,7 +193,7 @@ def upsert_zoho_book_contact(client):
             }],
         "billing_address": address,
         "shipping_address": shippingAddress,
-        "place_of_contact": cfg.STATE_CODES.get(address["state"], "OD")
+        "place_of_contact": state_code
     }
     if client.get("mobile"):
         data["contact_persons"][0]["mobile"] = client.get("mobile")
