@@ -330,6 +330,8 @@ def send_estimate_mail(estimate, email):
 
 
 def create_zoho_estimate(customer_id, item_id):
+    contact_person_id = get_contact_persons(customer_id)
+    state_code = "OD"
     response = requests.post(
         "https://books.zoho.in/api/v3/estimates",
         params={
@@ -340,6 +342,8 @@ def create_zoho_estimate(customer_id, item_id):
         },
         json={
             "customer_id": customer_id,
+            "place_of_supply": state_code,
+            "contact_persons": [str(contact_person_id)],
             "line_items": [
                 {
                     "item_id": item_id
@@ -463,9 +467,20 @@ def send_zoho_retainer_invoice(invoice_id):
     )
     print(response)
     return True
-    # if response.get("code") == 0:
-    #     return True
 
+def send_zoho_estimate(estimate_id):
+    response = requests.post(
+        "https://books.zoho.in/api/v3/estimates/" +
+        str(estimate_id)+"/status/sent",
+        params={
+            "organization_id": cfg.ZohoConfig.get("organization_id")
+        },
+        headers={
+            "Authorization": "Zoho-oauthtoken "+ZOHO_TOKEN["access_token"]
+        }
+    )
+    print(response)
+    return True
 
 def create_zoho_customer_payments(customer_id, reference_number):
     retainerinvoice = mongo.db.retainer_invoices.find_one(
@@ -1227,7 +1242,7 @@ def saveGeneralFormV2():
     if data["isSubmitted"] == True:
         data["status"] = "in_review"
         mongo.db.clients.update_one(
-            {'email': email},
+            {'email': email, 'roles': {'$ne': "franchisee"}},
             {'$addToSet': {
                 'roles': "in_review"
             }})
@@ -1378,27 +1393,27 @@ def acceptV2():
         })
     customer_id = mongo.db.zoho_customer.find_one({'email': email})
 
-    try:
-        invoice = create_zoho_retainer_invoice(
-            customer_id['zohoId'], "Advance against order", float(data['advance']))
-        time.sleep(1)
-        invoice_id = invoice.get('retainerinvoice_id')
-        invoice_number = invoice.get('retainerinvoice_number')
-        mongo.db.retainer_invoices.insert_one(
-            {
-                "email": email,
-                "invoice_id": invoice_id,
-                "invoice_number": invoice_number,
-                "customer_id": customer_id['zohoId'],
-                "amount": float(data['advance']),
-                "invoice_status": "unpaid",
-                "form_id": formId,
-                "timestamp": int(round(time.time() * 1000)),
-            })
-        send_zoho_retainer_invoice(invoice_id)
+    # try:
+    #     invoice = create_zoho_retainer_invoice(
+    #         customer_id['zohoId'], "Advance against order", float(data['advance']))
+    #     time.sleep(1)
+    #     invoice_id = invoice.get('retainerinvoice_id')
+    #     invoice_number = invoice.get('retainerinvoice_number')
+    #     mongo.db.retainer_invoices.insert_one(
+    #         {
+    #             "email": email,
+    #             "invoice_id": invoice_id,
+    #             "invoice_number": invoice_number,
+    #             "customer_id": customer_id['zohoId'],
+    #             "amount": float(data['advance']),
+    #             "invoice_status": "unpaid",
+    #             "form_id": formId,
+    #             "timestamp": int(round(time.time() * 1000)),
+    #         })
+    #     send_zoho_retainer_invoice(invoice_id)
 
-    except Exception:
-        print(traceback.format_exc())
+    # except Exception:
+    #     print(traceback.format_exc())
     return jsonify({"message": "Success"})
 
 
@@ -1432,13 +1447,15 @@ def getRetainerInvoices():
 
 @app.route('/franchisee/v2/markAsPaid', methods=['POST'])
 @cross_origin()
-@verify_token
+# @verify_token
 def markAsPaid():
-    invoice_id = request.json.get("invoiceId")
-    data = mongo.db.retainer_invoices.find_one_and_update({"invoice_id": invoice_id}, {
-        "$set": {"invoice_status": "paid"}})
-    email = mongo.db.zoho_customer.find_one(
-        {"zohoId": data["customer_id"]})['email']
+    # invoice_id = request.json.get("invoiceId")
+    # data = mongo.db.retainer_invoices.find_one_and_update({"invoice_id": invoice_id}, {
+    #     "$set": {"invoice_status": "paid"}})
+    # email = mongo.db.zoho_customer.find_one(
+    #     {"zohoId": data["customer_id"]})['email']
+    email = request.json.get('email')
+    form_id= request.json.get('formId')
     mongo.db.clients.update_one(
         {'email': email},
         {
@@ -1456,14 +1473,14 @@ def markAsPaid():
         })
 
     form_data = mongo.db.application_forms.find_one_and_update(
-        {"formId": data["form_id"]}, {"$set": {"isConverted": True}})
+        {"formId": form_id}, {"$set": {"isConverted": True}})
 
     order_id = mongo.db.order_num.find_one({"id": 1})['order_id']
     date = int(round(time.time() * 1000))
     mongo.db.orders.insert_one({
         "email": email,
         "order_id": "EK-" + str(order_id),
-        "model_uid": form_data['uid'],
+        "model_uid": 1,
         "date": date,
         "status": "placed",
         "model_image": "",
@@ -1484,7 +1501,7 @@ def markAsPaid():
         "device_id": device_id,
         "state": form_data["state"],
         "town": form_data["town"],
-        "location": data.get("location"),
+        "location": "",
         "order_id": "EK-" + str(order_id),
         "isSubscription": isSubscription
     })
@@ -1977,8 +1994,8 @@ def getAllOrders():
     for items in data:
         if items['status'] != 'pending':
             d = {}
-            if mongo.db.docs.find_one({"order_id": items['order_id']}):
-                email = mongo.db.docs.find_one({"order_id":
+            if mongo.db.device_ids.find_one({"order_id": items['order_id']}):
+                email = mongo.db.device_ids.find_one({"order_id":
                                                 items['order_id']})['email']
                 if mongo.db.clients.find_one({"email": email}):
                     name1 = mongo.db.clients.find_one(
@@ -2924,7 +2941,7 @@ def getAllLocations():
         locations = mongo.db.device_ids.find(
             {"state": re.compile(state, re.IGNORECASE),
              "town": re.compile(town, re.IGNORECASE)},
-            {"_id": 0, "location": 1, "device_id": 1})
+            {"_id": 0, "location": 1, "device_id": 1, "lat": 1, "lon":1})
         return jsonify({"locations": list(locations)})
     return jsonify({"message": "No State/City provided"}), 400
 
@@ -3296,8 +3313,11 @@ def addToFavourites():
     if not zohoId or not itemId:
         return jsonify({"message": "Could not send estimate"})
 
-    create_zoho_estimate(zohoId.get("zohoId"), itemId.get("zoho_itemid")),
-
+    #create_zoho_estimate(zohoId.get("zohoId"), itemId.get("zoho_itemid"))
+    estimate = create_zoho_estimate(zohoId.get("zohoId"), "221779000002220850")
+    estimate_id = estimate.get("estimate_id")
+    print(estimate_id) 
+    send_zoho_estimate(estimate_id)
     return jsonify({"message": "Success"})
 
 
