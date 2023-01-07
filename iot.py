@@ -154,6 +154,7 @@ def logout():
 @cross_origin()
 def upload():
     if request.method == "POST":
+        print(request.json)
         timestamp = int(round(time.time() * 1000))
         data = request.json["values"]
         uid = request.json["deviceId"]

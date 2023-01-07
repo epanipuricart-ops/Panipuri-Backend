@@ -1288,7 +1288,11 @@ def associatedMessage():
         if state_data and town_data:
             return jsonify({"message": "You will be associated with " + str(town_data['place']) + " town franchise", "isSuccess": True})
         elif state_data and not town_data:
-            return jsonify({"message": "You will be associated with " + str(state_data['place']) + " state franchise", "isSuccess": True})
+            print(town)
+            if town != 'Gurgaon':            
+                return jsonify({"message": "You will be associated with " + str(state_data['place']) + " state franchise", "isSuccess": True})
+            else:
+                return jsonify({"message": "Franchise is available subject to conditions", "isSuccess": True})
         elif not state_data and town_data:
             return jsonify({"message": "You will be associated with " + str(town_data['place']) + " town franchise", "isSuccess": True})
         else:
@@ -1337,6 +1341,22 @@ def getPricing():
         else:
             return jsonify({"message": "No data found"}), 404
 
+@app.route('/franchisee/v2/getModelNames', methods=['GET'])
+@cross_origin()
+#@verify_token
+def getgetModelNames():
+    data = mongo.db.models.find({})
+    models = set()
+    extensions = set()
+    purchase_types = set()
+    for ele in data:
+        if ele['model_name']:
+            models.add(ele['model_name'])
+            extensions.add(ele['extension'])
+            purchase_types.add(ele['purchase_type'])
+    return jsonify({"models": list(models), "extensions": list(extensions),"purchaseType": list(purchase_types),"default": "premium"})
+        
+    
 
 @app.route('/franchisee/v2/getCandidateForms', methods=['GET'])
 @cross_origin()
@@ -3798,7 +3818,7 @@ def remind_otp():
 
 if __name__ == "__main__":
     print("starting...")
-    refresh_zoho_access_token(force=True)
+    
     serve(
         app,
         host=cfg.Flask["HOST"],
