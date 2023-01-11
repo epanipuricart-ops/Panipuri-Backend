@@ -27,6 +27,7 @@ import shutil
 import re
 import logging
 import traceback
+import base64
 
 # Create and configure logger
 logging.basicConfig(filename="franchisee.log",
@@ -64,6 +65,7 @@ agreement_url = "http://15.207.147.88:8081/"
 mailer_url = "http://15.207.147.88:8080/"
 payment_url = "http://15.207.147.88:8083/"
 iot_api_url = "http://15.207.147.88:5002/"
+wati_server_url = "https://live-server-14439.wati.io/api/v1/"
 
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
@@ -878,7 +880,31 @@ def sendOTP():
                                          data=json.dumps(data),
                                          headers=headers)
                 json_resp = json.loads(response.text)
-
+                print(json_resp)
+                decoded = base64.b64decode(json_resp['otp'])
+                otp = decoded.decode('utf-8')
+                payload = {
+                    "template_name": "otp",
+                    "broadcast_name": "otp_broadcast",
+                    "parameters": [
+                    {
+                        "name": "name",
+                        "value": str(firstName)
+                    },
+                    {
+                        "name": "otp",
+                        "value": str(otp)
+                    }
+                ]   
+                }
+                final_url = wati_server_url +'sendTemplateMessage?whatsappNumber='+'91'+str(phone)
+                wati_header = {"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI2ODQ2MWFlMi0wNzhlLTQ5NmYtYmY3My02MGMyYWI1YjdkMGYiLCJ1bmlxdWVfbmFtZSI6InRlY2hub2xvZ3lAZXBhbmlwdXJpY2FydC5jby5pbiIsIm5hbWVpZCI6InRlY2hub2xvZ3lAZXBhbmlwdXJpY2FydC5jby5pbiIsImVtYWlsIjoidGVjaG5vbG9neUBlcGFuaXB1cmljYXJ0LmNvLmluIiwiYXV0aF90aW1lIjoiMTAvMTIvMjAyMiAwNjoxODowMCIsImRiX25hbWUiOiIxNDQzOSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.Cqmlj-n0P5YqMtYrojlfTLJ0elbZhPjjY1OnrcslHto",
+                                "Content-Type": "application/json-patch+json",
+                                "accept": "*/*"}
+                res = requests.post(final_url,
+                                         data=json.dumps(payload),
+                                         headers=wati_header)
+                print(res)
                 return json_resp
             except:
                 return jsonify({"message": "Some Error Occurred"}), 500
@@ -1177,6 +1203,130 @@ def saveGeneralFormV2():
                              "verify_aud": False
                          })
     email = decoded['email']
+    valid_fields = [
+        "title", "firstName", "lastName", "mobile",
+        "gst_treatment", "billing_address", "billing_pincode", "shipping_address", "shipping_pincode",
+        "franchise_type", "master_franchise_category", "state", "town",
+        # Optional Fields
+        "purchase_type", "gst_no", "trade_name", "monthly_target", "annual_target",
+        "model_name", "model_extension", "isSubmitted", "isShippingAddressSame", "tnc"]
+    data = {field: str(request.form.get(field, "")) for field in valid_fields}
+    if data["isSubmitted"] == 'true':
+        data["isSubmitted"] = True
+    else:
+        data["isSubmitted"] = False
+    if data["isShippingAddressSame"] == 'true':
+        data["isShippingAddressSame"] = True
+    else:
+        data["isShippingAddressSame"] = False
+    if data["tnc"] == "true":
+        data["tnc"] = True
+    else:
+        data["tnc"] = False
+    data["email"] = email
+    data["isConverted"] = False
+    if data["gst_treatment"] == "business_registered_regular":
+        data["customer_sub_type"] = "business"
+        data["company_name"] = data["trade_name"]
+    else:
+        data["customer_sub_type"] = "individual"
+        data["company_name"] = ""
+
+    try:
+        result = mongo.db.application_forms.find_one(
+            {
+                "email": data["email"],
+                "isConverted": False,
+            }
+        )
+    except Exception:
+        print(traceback.format_exc())
+        return jsonify({"message": "Some error occurred"}), 500
+
+    if not result:
+        data["createdDate"] = datetime.now()
+        data["formId"] = generate_custom_id()
+    data["location"] = ""
+    data["modifiedDate"] = datetime.now()
+    timestamp = int(round(time.time() * 1000))
+    if data["gst_treatment"] == "business_registered_regular":
+        data["gst_no"] = request.form.get('gst_no', '')
+        data["aadhar"] = ""
+    else:
+        data["gst_no"] = ""
+        # TODO: Upload aadhaar and set path
+        if request.files.get('file'):
+            file = request.files['file']
+            if file and allowed_file(file.filename):
+                filename_temp = secure_filename(file.filename)
+                ext = filename_temp.split('.')[1]
+                filename = 'aadhar' + '_' + str(timestamp)
+                file.save(os.path.join(
+                    app.config['UPLOAD_FOLDER'], str(filename)+'.'+ext))
+                data["aadhar"] = filename + '.' + ext
+    print(data["isSubmitted"])
+    if data["isSubmitted"] == True:
+        data["status"] = "in_review"
+        mongo.db.clients.update_one(
+            {'email': email, 'roles': {'$ne': "franchisee"}},
+            {'$addToSet': {
+                'roles': "in_review"
+            }})
+        payload = {
+                    "template_name": "form_received",
+                    "broadcast_name": "form_received",
+                    "parameters": [
+                    {
+                        "name": "name",
+                        "value": str(data["firstName"])
+                    }
+                ]   
+                }
+        final_url = wati_server_url +'sendTemplateMessage?whatsappNumber='+'917366904004'
+        wati_header = {"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI2ODQ2MWFlMi0wNzhlLTQ5NmYtYmY3My02MGMyYWI1YjdkMGYiLCJ1bmlxdWVfbmFtZSI6InRlY2hub2xvZ3lAZXBhbmlwdXJpY2FydC5jby5pbiIsIm5hbWVpZCI6InRlY2hub2xvZ3lAZXBhbmlwdXJpY2FydC5jby5pbiIsImVtYWlsIjoidGVjaG5vbG9neUBlcGFuaXB1cmljYXJ0LmNvLmluIiwiYXV0aF90aW1lIjoiMTAvMTIvMjAyMiAwNjoxODowMCIsImRiX25hbWUiOiIxNDQzOSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.Cqmlj-n0P5YqMtYrojlfTLJ0elbZhPjjY1OnrcslHto",
+                                "Content-Type": "application/json-patch+json",
+                                "accept": "*/*"}
+        res = requests.post(final_url,
+                                         data=json.dumps(payload),
+                                         headers=wati_header)
+
+        print(res)
+    else:
+        data["status"] = "not_required"
+    models = mongo.db.models.find_one({"franchise_type": data['franchise_type'],
+                                       "master_franchise_category": data['master_franchise_category'],
+                                       "purchase_type": data['purchase_type'], "model_name": data['model_name'],
+                                       "extension": data["model_extension"]})
+    data["uid"] = models["uid"]
+    data["price"] = models["price"]
+    data["advance"] = models["advance"]
+    data["appPrice"] = models["appPrice"]
+
+    try:
+        mongo.db.application_forms.update_one(
+            {
+                "email": data["email"],
+                "isConverted": False,
+            },
+            {"$set": data}, upsert=True
+        )
+        upsert_zoho_book_contact(data)
+        return jsonify({"message": "Successfully saved"})
+    except Exception:
+        print(traceback.format_exc())
+        return jsonify({"message": "Some error occurred"}), 500
+
+@app.route('/franchisee/v2/updateReceivedForm', methods=['POST'])
+@cross_origin()
+@verify_token
+def updateReceivedForm():
+    token = request.headers['Authorization']
+    decoded = jwt.decode(token,
+                         options={
+                             "verify_signature": False,
+                             "verify_aud": False
+                         })
+    email = request.form.get('email')
     valid_fields = [
         "title", "firstName", "lastName", "mobile",
         "gst_treatment", "billing_address", "billing_pincode", "shipping_address", "shipping_pincode",
