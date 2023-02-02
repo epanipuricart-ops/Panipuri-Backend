@@ -1327,6 +1327,7 @@ def updateReceivedForm():
                              "verify_aud": False
                          })
     email = request.form.get('email')
+    formId = request.form.get('formId')
     valid_fields = [
         "title", "firstName", "lastName", "mobile",
         "gst_treatment", "billing_address", "billing_pincode", "shipping_address", "shipping_pincode",
@@ -1348,6 +1349,7 @@ def updateReceivedForm():
     else:
         data["tnc"] = False
     data["email"] = email
+    data["formId"] = formId
     data["isConverted"] = False
     if data["gst_treatment"] == "business_registered_regular":
         data["customer_sub_type"] = "business"
@@ -1359,7 +1361,7 @@ def updateReceivedForm():
     try:
         result = mongo.db.application_forms.find_one(
             {
-                "email": data["email"],
+                "email": data["formId"],
                 "isConverted": False,
             }
         )
@@ -3484,10 +3486,10 @@ def addToFavourites():
         return jsonify({"message": "Could not send estimate"})
 
     #create_zoho_estimate(zohoId.get("zohoId"), itemId.get("zoho_itemid"))
-    estimate = create_zoho_estimate(zohoId.get("zohoId"), "221779000002220850")
-    estimate_id = estimate.get("estimate_id")
-    print(estimate_id) 
-    send_zoho_estimate(estimate_id)
+    # estimate = create_zoho_estimate(zohoId.get("zohoId"), "221779000002220850")
+    # estimate_id = estimate.get("estimate_id")
+    # print(estimate_id) 
+    # send_zoho_estimate(estimate_id)
     return jsonify({"message": "Success"})
 
 
