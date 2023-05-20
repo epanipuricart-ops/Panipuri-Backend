@@ -523,6 +523,33 @@ def interaktOTP(name, otp):
                   headers=headers, json=data)
     return jsonify({"message": "Success"})
 
+def gallaboxOTP(name, otp):
+    headers = {
+        "Authorization": "Basic MjgtZ2U1NlptN3lMbTM1R1JQcUlwVk5XVmNycTVlcHVxRDFBdkRMSkVVbzo="
+    }
+    data ={
+    "channelId": "6405db81e762ad7185c3fd93",
+    "channelType": "whatsapp",
+    "recipient": {
+        "name": "Roshni",
+        "phone": "917008261197"
+    },
+    "whatsapp": {
+        "type": "template",
+        "template": {
+            "templateName": "otp",
+            "bodyValues": {
+                "name": "Roshni",
+                "variable_2": "123456"
+                
+            }
+        }
+    }
+}
+    requests.post("https://api.interakt.ai/v1/public/track/events/",
+                  headers=headers, json=data)
+    return jsonify({"message": "Success"})
+
 
 @app.route('/franchisee/register/<path:path>', methods=['POST'])
 @cross_origin()
