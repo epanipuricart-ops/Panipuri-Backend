@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, date
 from flask_apscheduler import APScheduler
 import requests
 import logging
+from paytmchecksum import PaytmChecksum
+from dateutil.relativedelta import relativedelta
 
 # Create and configure logger
 logging.basicConfig(filename="iot.log",
@@ -35,6 +37,8 @@ scheduler.start()
 
 global_key = "ueQ4sZ"
 # global_key = "JPM7Fg"
+mid = "LAGxBU41065183403473"
+mkey = "ZSL%28U1qm!2mrO3"
 payment_url = "http://15.207.147.88:8083/"
 ZOHO_TOKEN = {"access_token": "", "timestamp": time.time()}
 
@@ -44,6 +48,53 @@ def generate_custom_id():
         binascii.b2a_hex(os.urandom(4)).decode()
         + hex(int(time.time() * 10**5) % 10**12)[2:]
     )
+
+
+def create_paytm_token(mid, order_id, callback, exp_date, price, uid, mkey, start_date):
+    paytmParams = dict()
+    paytmParams["body"] = {
+        "requestType": "NATIVE_SUBSCRIPTION",
+        "mid": mid,
+        "websiteName": "WEBSTAGING",
+        "orderId": order_id,
+        "callbackUrl": callback,
+        "subscriptionAmountType": "FIX",
+        "subscriptionFrequency": "1",
+        "subscriptionFrequencyUnit": "MONTH",
+        "subscriptionStartDate": start_date,
+        "subscriptionGraceDays": "3",
+        "subscriptionExpiryDate": exp_date,
+        "subscriptionEnableRetry": "1",
+        "txnAmount": {
+            "value": price,
+            "currency": "INR",
+        },
+        "userInfo": {
+            "custId": uid,
+        },
+    }
+    print(paytmParams["body"])
+    checksum = PaytmChecksum.generateSignature(
+        json.dumps(paytmParams["body"]), mkey)
+    print(checksum)
+    paytmParams["head"] = {
+        "signature": checksum
+    }
+    print(paytmParams["head"])
+    post_data = json.dumps(paytmParams)
+
+    # for Staging
+    url = "https://securegw-stage.paytm.in/subscription/create?mid={}&orderId={}".format(
+        mid, order_id)
+    print(url)
+
+    # for Production
+    # url = "https://securegw.paytm.in/subscription/create?mid=YOUR_MID_HERE&orderId=ORDERID_98765"
+
+    response = requests.post(url, data=post_data, headers={
+                             "Content-type": "application/json"}).json()
+    print(response)
+    return response
 
 
 def refresh_zoho_access_token(force=False):
@@ -646,21 +697,24 @@ def getStats():
 @cross_origin()
 def wizardGetStats():
     uid = request.args.get("customerId")
-    print("uid",uid)
+    print("uid", uid)
     if True:
         available, data = sort(uid)
         if available:
             return jsonify({"result": data})
         else:
             return jsonify({"message": "No record found"}), 403
-        
+
+
 @app.route("/wizard/saveTimings", methods=["POST"])
 @cross_origin()
 def saveTimings():
     uid = request.json.get("customerId")
     data = request.json.get("data")
-    mongo.db.timings.update_one({"device_id": uid}, {"$set": {"data": data}},upsert=True)
+    mongo.db.timings.update_one(
+        {"device_id": uid}, {"$set": {"data": data}}, upsert=True)
     return jsonify({"message": "Success"})
+
 
 @app.route("/wizard/getTimings", methods=["GET"])
 @cross_origin()
@@ -668,6 +722,7 @@ def getTimings():
     uid = request.args.get("customerId")
     data = mongo.db.timings.find_one({"device_id": uid}, {"_id": 0})
     return jsonify({"data": data})
+
 
 @app.route("/getToday", methods=["GET", "POST"])
 @cross_origin()
@@ -1353,9 +1408,131 @@ def payuFailureWizard():
     return render_template('fail.html')
 
 
+@app.route('/wizard/initiateMandate', methods=['POST'])
+@cross_origin()
+def initiateMandate():
+    uid = request.json.get('customerId')
+    user_data = mongo.db.device_ids.find_one({"device_id": uid})
+    device_data = mongo.db.devices.find_one({"uid": uid})
+    model_data = mongo.db.models.find_one({"uid": user_data["model_uid"]})
+    print(model_data["appPrice"])
+    order_id = generate_custom_id()
+    # order_id = "OREDRID_98765"
+    print(order_id)
+    callback = "https://epanipuricart.com/wizard/mandateCallBack"
+    activation_date = datetime.strptime(
+        device_data["activeDate"], "%m-%d-%Y")
+    date_obj = activation_date + relativedelta(years=3)
+    exp_date = date_obj.strftime("%Y-%m-%d")
+    print(exp_date)
+    tok = create_paytm_token(mid, order_id, callback,
+                             exp_date, "100.00", uid, mkey, datetime.now().strftime("%Y-%m-%d"))
+    tok["orderId"] = order_id
+    return jsonify(tok)
+
+
+@app.route('/wizard/mandateCallBack', methods=['POST'])
+@cross_origin()
+def mandateCallBack():
+    print("mandate success")
+    print('form', request.form)
+    print('json', request.json)
+    return render_template('index.html')
+
+
+@app.route("/wizard/getStuffingStatus", methods=["GET"])
+@cross_origin()
+def getStuffingStatus():
+    stuffingDeviceId = request.args.get("stuffingDeviceId")
+    if stuffingDeviceId:
+        deviceData = mongo.db.stuffing_devices.find_one(
+            {"stuffingDeviceId": stuffingDeviceId},
+            {"_id": 0})
+        if not deviceData:
+            return jsonify({"message": "No such device found"}), 400
+        return jsonify(deviceData)
+    return jsonify({"message": "Missing Parameters"}), 400
+
+
+@app.route("/wizard/changeSetting/<int:id>", methods=["POST"])
+@cross_origin()
+def changeSetting(id):
+    value = id
+    stuffingDeviceId = request.json['stuffingDeviceId']
+    mongo.db.stuffing_devices.update_one({"stuffingDeviceId": stuffingDeviceId},
+                                         {"$set": {"setting": value}})
+    return jsonify({"message": "Success"}), 200
+
+
+@app.route("/wizard/grinding/<int:id>", methods=["POST"])
+@cross_origin()
+def grinding(id):
+    status = int(id)
+    stuffingDeviceId = request.json['stuffingDeviceId']
+    mongo.db.stuffing_devices.update_one({"stuffingDeviceId": stuffingDeviceId},
+                                         {"$set": {"appGrindingState": status}})
+    return jsonify({"message": "Success"}), 200
+
+
+@app.route("/wizard/dispensing/<int:id>", methods=["POST"])
+@cross_origin()
+def dispensing(id):
+    status = int(id)
+    stuffingDeviceId = request.json['stuffingDeviceId']
+    mongo.db.stuffing_devices.update_one({"stuffingDeviceId": stuffingDeviceId},
+                                         {"$set": {"appDispensingState": status}})
+    return jsonify({"message": "Success"}), 200
+
+
+@app.route("/wizard/sendStuffingSensorValues", methods=["POST"])
+@cross_origin()
+def sendStuffingSensorValues():
+    stuffingDeviceId = request.json['stuffingDeviceId']
+    temp = request.json['temp']
+    tds = request.json['tds']
+    ph = request.json['ph']
+    mongo.db.stuffing_sensor.insert_one({"stuffingDeviceId": stuffingDeviceId,
+                                         "temp": temp, "tds": tds, "ph": ph,
+                                         "created_date": datetime.now().strftime("%m-%d-%Y")})
+    return jsonify({"message": "Success"}), 200
+
+
+@app.route("/wizard/getLatestStuffingSensorValues", methods=["GET"])
+@cross_origin()
+def getLatestStuffingSensorValues():
+    stuffingDeviceId = request.args['stuffingDeviceId']
+    data = list(mongo.db.stuffing_sensor.find(
+        {"stuffingDeviceId": stuffingDeviceId}, {"_id": 0}))
+    result = data[-1]
+    return jsonify(result), 200
+
+@app.route("/wizard/getFlavourNames", methods=["GET"])
+@cross_origin()
+def getFlavourNames():
+    uid = request.args.get('deviceId')
+    data = mongo.db.flavours.find_one(
+        {"device_id": uid}, {"_id": 0})
+    if data:
+        return jsonify(data)
+    else:
+        return jsonify({})
+    
+@app.route("/wizard/updateFlavourNames", methods=["POST"])
+@cross_origin()
+def updateFlavourNames():
+    uid = request.json.get('deviceId')
+    flavour1 = request.json.get('flavour1')
+    flavour2 = request.json.get('flavour2')
+    flavour3 = request.json.get('flavour3')
+    mongo.db.flavours.update_one({"device_id":uid},{"$set": {"flavour1":flavour1,
+                                                             "flavour2": flavour2,
+                                                               "flavour3":flavour3}},
+                                                                upsert=True)
+    return jsonify({"message": "Success"})
+
 if __name__ == "__main__":
     print("starting...")
-    refresh_zoho_access_token(force=True)
+    # refresh_zoho_access_token(force=True)
     serve(
         app,
         host=cfg.IOTFlask["HOST"],

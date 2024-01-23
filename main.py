@@ -1,7 +1,7 @@
 from flask import (Flask, session, send_from_directory, send_file,
                    render_template)
 from flask import request, redirect, url_for
-from waitress import serve
+ 
 from flask_pymongo import PyMongo
 from pymongo import ReturnDocument
 from flask import jsonify
@@ -28,6 +28,7 @@ import re
 import logging
 import traceback
 import base64
+from waitress import serve
 
 # Create and configure logger
 logging.basicConfig(filename="franchisee.log",
@@ -1471,7 +1472,7 @@ def associatedMessage():
 
 @app.route('/franchisee/v2/getPricing', methods=['GET'])
 @cross_origin()
-@verify_token
+# @verify_token
 def getPricing():
     franchise_type = request.args.get('franchiseType')
     if franchise_type == 'franchise':
@@ -1508,7 +1509,16 @@ def getgetModelNames():
             purchase_types.add(ele['purchase_type'])
     return jsonify({"models": list(models), "extensions": list(extensions),"purchaseType": list(purchase_types),"default": "premium"})
         
-    
+@app.route('/franchisee/v2/getAllFranchise', methods=['GET'])
+@cross_origin()
+#@verify_token
+def getAllFranchise():
+    data = list(mongo.db.device_ids.find({}, {"_id": 0}))
+    arr = []
+    if len(data) != 0:
+        for ele in data:
+            arr.append(ele)
+    return jsonify(arr)
 
 @app.route('/franchisee/v2/getCandidateForms', methods=['GET'])
 @cross_origin()
@@ -1588,7 +1598,16 @@ def acceptV2():
     #     print(traceback.format_exc())
     return jsonify({"message": "Success"})
 
-
+# to develop
+@app.route('/franchisee/v2/generateMachineInfo', methods=['POST'])
+@cross_origin()
+@verify_token
+def generateMachineInfo():
+    machine_id = request.json.get("machineId")
+    mongo.db.devices.insert_one({""})
+    
+    
+    
 @app.route('/franchisee/v2/rejectApplicationForms', methods=['POST'])
 @cross_origin()
 @verify_token
@@ -3673,9 +3692,13 @@ def uploadLevel():
 def latestLevel():
     if request.method == "GET":
         uid = request.args.get("deviceId")
+        device = mongo.db.devices.find_one({'uid': uid})
         data = mongo.db.levels.find_one({'uid': uid})['data'][-3:]
         print(data)
-        return jsonify({"n1": data[0]["low"], "n2": data[1]["low"], "n3": data[2]["low"]})
+        if device["type"] == "3":
+            return jsonify({"n1": data[0]["low"], "n2": data[1]["low"], "n3": data[2]["low"]})
+        elif device["type"] == "2":
+            return jsonify({"n1": data[0]["low"], "n2": data[1]["low"]})
     else:
         return jsonify({"message": "Authorization error"}), 403
 
