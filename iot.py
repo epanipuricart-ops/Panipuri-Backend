@@ -17,9 +17,11 @@ from paytmchecksum import PaytmChecksum
 from dateutil.relativedelta import relativedelta
 
 # Create and configure logger
-logging.basicConfig(filename="iot.log",
-                    format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s',
-                    filemode='a')
+logging.basicConfig(
+    filename="iot.log",
+    format="%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s",
+    filemode="a",
+)
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -74,25 +76,26 @@ def create_paytm_token(mid, order_id, callback, exp_date, price, uid, mkey, star
         },
     }
     print(paytmParams["body"])
-    checksum = PaytmChecksum.generateSignature(
-        json.dumps(paytmParams["body"]), mkey)
+    checksum = PaytmChecksum.generateSignature(json.dumps(paytmParams["body"]), mkey)
     print(checksum)
-    paytmParams["head"] = {
-        "signature": checksum
-    }
+    paytmParams["head"] = {"signature": checksum}
     print(paytmParams["head"])
     post_data = json.dumps(paytmParams)
 
     # for Staging
-    url = "https://securegw-stage.paytm.in/subscription/create?mid={}&orderId={}".format(
-        mid, order_id)
+    url = (
+        "https://securegw-stage.paytm.in/subscription/create?mid={}&orderId={}".format(
+            mid, order_id
+        )
+    )
     print(url)
 
     # for Production
     # url = "https://securegw.paytm.in/subscription/create?mid=YOUR_MID_HERE&orderId=ORDERID_98765"
 
-    response = requests.post(url, data=post_data, headers={
-                             "Content-type": "application/json"}).json()
+    response = requests.post(
+        url, data=post_data, headers={"Content-type": "application/json"}
+    ).json()
     print(response)
     return response
 
@@ -121,8 +124,7 @@ def create_zoho_retainer_invoice(customer_id, item_name, price):
     response = requests.post(
         "https://books.zoho.in/api/v3/retainerinvoices",
         params={"organization_id": cfg.ZohoConfig.get("organization_id")},
-        headers={"Authorization": "Zoho-oauthtoken " +
-                 ZOHO_TOKEN["access_token"]},
+        headers={"Authorization": "Zoho-oauthtoken " + ZOHO_TOKEN["access_token"]},
         json={
             "customer_id": customer_id,
             "date": date.today().strftime("%Y-%m-%d"),
@@ -151,8 +153,7 @@ def wizardLogin():
             out.append(ele["device_id"])
         try:
             name = mongo.db.clients.find_one({"email": email})["firstName"]
-            res = {"email": email, "name": name,
-                   "devices": out, "role": "franchisee"}
+            res = {"email": email, "name": name, "devices": out, "role": "franchisee"}
             return jsonify(res)
         except:
             return jsonify({"message": "Some error occurred"}), 500
@@ -177,12 +178,9 @@ def saveFCMToken():
     device_id = request.json["device_id"]
     fcm_token = request.json["fcm_token"]
     mongo.db.franchisee_tokens.update_one(
-        {
-            "device_id": device_id,
-            "fcm_token": fcm_token
-        },
+        {"device_id": device_id, "fcm_token": fcm_token},
         {"$set": {"isActive": True}},
-        upsert=True
+        upsert=True,
     )
     return jsonify({"message": "Token updated successfully"})
 
@@ -193,10 +191,7 @@ def logout():
     device_id = request.json["device_id"]
     fcm_token = request.json["fcm_token"]
     mongo.db.franchisee_tokens.delete_one(
-        {
-            "device_id": device_id,
-            "fcm_token": fcm_token
-        }
+        {"device_id": device_id, "fcm_token": fcm_token}
     )
     return jsonify({"message": "Token deleted successfully"})
 
@@ -285,11 +280,7 @@ def registerDevice():
         timestamp = int(round(time.time() * 1000))
         q = {
             "uid": uid,
-            "data": [{
-                "name": noz["name"],
-                "low":0,
-                "date": timestamp
-            } for noz in arr]
+            "data": [{"name": noz["name"], "low": 0, "date": timestamp} for noz in arr],
         }
         mongo.db.levels.insert_one(q)
         for ele in arr:
@@ -419,12 +410,71 @@ def toggle():
 # route to toggle
 
 
+@app.route("/wizard/changeAutoManual", methods=["POST"])
+@cross_origin()
+def changeAutoManual():
+    uid = request.json["customerId"]
+    auto_manual = request.json["autoManual"]
+    mongo.db.devices.update_one(
+        {"uid": uid}, {"$set": {"autoManual": int(auto_manual)}}
+    )
+    return jsonify({"message": "Success"})
+
+
+@app.route("/wizard/getAutoManual", methods=["GET"])
+@cross_origin()
+def getAutoManual():
+    uid = request.args["customerId"]
+    data = mongo.db.devices.find_one({"uid": uid})
+    return jsonify({"autoManual": data.get("autoManual")})
+
+
+@app.route("/wizard/getNewMLSetting", methods=["GET"])
+@cross_origin()
+def getNewMLSetting():
+    uid = request.args["customerId"]
+    data = mongo.db.devices.find_one({"uid": uid})
+    val = ""
+    index = -1
+    if data["settings"] == "15":
+        val = "s"
+        index = 0
+    elif data["settings"] == "20":
+        val = "m"
+        index = 1
+    elif data["settings"] == "25":
+        val = "l"
+        index = 2
+    else:
+        val = "xl"
+        index = 3
+    time_val_1 = ""
+    time_val_2 = ""
+    time_val_3 = ""
+    timings = mongo.db.timings.find_one({"device_id": uid})["data"]
+    time_val_1 = timings[0]["n1"][index][data["settings"]]
+    time_val_2 = timings[1]["n2"][index][data["settings"]]
+    time_val_3 = timings[2]["n3"][index][data["settings"]]
+    string = (
+        "mlsetting "
+        + val
+        + " n1 "
+        + time_val_1
+        + " n2 "
+        + time_val_2
+        + " n3 "
+        + time_val_3
+    )
+    return jsonify({"output": string})
+
+
 @app.route("/wizard/toggle", methods=["GET", "POST"])
 @cross_origin()
 def wizardToggle():
     if request.method == "POST":
         uid = request.json["customerId"]
-        if True:
+        online = int(request.json.get("online"))
+        if online:
             devices = mongo.db.devices
             state = request.json["state"]
             devices.update_one({"uid": uid}, {"$set": {"activeState": state}})
@@ -447,6 +497,13 @@ def wizardToggle():
                         "status": 3,
                     }
                 )
+        else:
+            devices = mongo.db.devices
+            state = request.json["state"]
+            devices.update_one(
+                {"uid": uid}, {"$set": {"activeState": state, "deviceState": state}}
+            )
+            return jsonify({"message": "Device Started", "status": 1})
 
     else:
         return jsonify({"message": "Authorization Error"}), 403
@@ -712,7 +769,8 @@ def saveTimings():
     uid = request.json.get("customerId")
     data = request.json.get("data")
     mongo.db.timings.update_one(
-        {"device_id": uid}, {"$set": {"data": data}}, upsert=True)
+        {"device_id": uid}, {"$set": {"data": data}}, upsert=True
+    )
     return jsonify({"message": "Success"})
 
 
@@ -766,14 +824,16 @@ def getLevel():
         return jsonify({"message": "Authentication Error"}), 401
 
 
-@app.route('/getLatestLevel', methods=['GET', 'POST'])
+@app.route("/getLatestLevel", methods=["GET", "POST"])
 @cross_origin()
 def latestLevel():
     if request.method == "GET":
         uid = request.args.get("deviceId")
-        data = mongo.db.levels.find_one({'uid': uid})['data'][-3:]
+        data = mongo.db.levels.find_one({"uid": uid})["data"][-3:]
         print(data)
-        return jsonify({"n1": data[0]["low"], "n2": data[1]["low"], "n3": data[2]["low"]})
+        return jsonify(
+            {"n1": data[0]["low"], "n2": data[1]["low"], "n3": data[2]["low"]}
+        )
     else:
         return jsonify({"message": "Authorization error"}), 403
 
@@ -859,8 +919,7 @@ def getCountByDate():
                         for item in ele["count"]:
                             if item["date"] == start:
                                 c["count"] = [
-                                    {"date": start,
-                                        "dailyCount": item["dailyCount"]}
+                                    {"date": start, "dailyCount": item["dailyCount"]}
                                 ]
                                 break
                         arr.append(c)
@@ -873,8 +932,7 @@ def getCountByDate():
                         c["count"] = []
                         for item in ele["count"]:
                             curr = int(
-                                datetime.strptime(
-                                    item["date"], "%m-%d-%Y").timestamp()
+                                datetime.strptime(item["date"], "%m-%d-%Y").timestamp()
                                 * 1000
                             )
                             if curr >= s and curr <= e:
@@ -911,8 +969,7 @@ def wizardGetCountByDate():
                         for item in ele["count"]:
                             if item["date"] == start:
                                 c["count"] = [
-                                    {"date": start,
-                                        "dailyCount": item["dailyCount"]}
+                                    {"date": start, "dailyCount": item["dailyCount"]}
                                 ]
                                 break
                         arr.append(c)
@@ -925,8 +982,7 @@ def wizardGetCountByDate():
                         c["count"] = []
                         for item in ele["count"]:
                             curr = int(
-                                datetime.strptime(
-                                    item["date"], "%m-%d-%Y").timestamp()
+                                datetime.strptime(item["date"], "%m-%d-%Y").timestamp()
                                 * 1000
                             )
                             if curr >= s and curr <= e:
@@ -945,8 +1001,7 @@ def wizardGetCountByDate():
 def getProfile():
     device_id = request.args.get("deviceId")
     if device_id:
-        profile = mongo.db.wizard_profile.find_one(
-            {"deviceId": device_id}, {"_id": 0})
+        profile = mongo.db.wizard_profile.find_one({"deviceId": device_id}, {"_id": 0})
         return jsonify(profile)
     return jsonify({"message": "No deviceId sent"}), 400
 
@@ -1122,10 +1177,7 @@ def payNowWizard():
 
     customerName = client_data["firstName"]
     data.update(
-        {
-            "customerName": customerName,
-            "customerEmail": email, "customerPhone": phone
-        }
+        {"customerName": customerName, "customerEmail": email, "customerPhone": phone}
     )
     createOrder = data
     valid_flag = all(field in data for field in valid_fields)
@@ -1160,9 +1212,8 @@ def payNowWizard():
         data = list(data)
         if any(d["closeCategory"] for d in data):
             return (
-                jsonify({
-                    "message": "One or more items are ordered from a closed category"
-                }
+                jsonify(
+                    {"message": "One or more items are ordered from a closed category"}
                 ),
                 400,
             )
@@ -1202,7 +1253,7 @@ def payNowWizard():
             "firstname": customerName,
             "email": email,
             "service_provider": "payu_paisa",
-            "txType": False
+            "txType": False,
         }
     # update statistics
     for item in items_arr:
@@ -1211,13 +1262,14 @@ def payNowWizard():
             {"$inc": {"totalOrders": item["qty"]}},
             upsert=True,
         )
-        mongo.db.item_statistics.update_one({
-            "itemId": item["itemId"],
-            "timestamp": datetime.combine(date.today(), datetime.min.time())
-        },
+        mongo.db.item_statistics.update_one(
             {
-                "$inc": {"dailyCount": item["qty"]}
-        }, upsert=True)
+                "itemId": item["itemId"],
+                "timestamp": datetime.combine(date.today(), datetime.min.time()),
+            },
+            {"$inc": {"dailyCount": item["qty"]}},
+            upsert=True,
+        )
     # print(post)
     res = requests.post(payment_url + "/api/payment/checkout", json=post)
     res = res.json()
@@ -1262,10 +1314,10 @@ def payNowWizard():
     return jsonify({"orderId": createOrder["orderId"]}), 200
 
 
-@app.route('/wizard/getUserOrderStatistics', methods=['GET'])
+@app.route("/wizard/getUserOrderStatistics", methods=["GET"])
 @cross_origin()
 def get_user_order_statistics():
-    email = request.args.get('email')
+    email = request.args.get("email")
     if not email:
         return jsonify({"message": "Email not found"}), 400
     data = mongo.db.customer_order_stats.find({"email": email}, {"_id": 0})
@@ -1273,7 +1325,7 @@ def get_user_order_statistics():
     return jsonify(data), 200
 
 
-@app.route('/wizard/getItemStatistics', methods=['GET'])
+@app.route("/wizard/getItemStatistics", methods=["GET"])
 @cross_origin()
 def getItemStatistics():
     token = request.headers["Authorization"]
@@ -1283,15 +1335,16 @@ def getItemStatistics():
     email = decoded["email"]
     query = {"customerEmail": email}
     startms = int(request.args.get("startms", 0))
-    endms = int(request.args.get("endms", "9"*13))
+    endms = int(request.args.get("endms", "9" * 13))
     query["timestamp"] = {"$gt": startms, "$lt": endms}
     items = mongo.db.shopping_orders.find(
-        query,
-        {"_id": 0, "items": 1, "total": 1, "timestamp": 1})
+        query, {"_id": 0, "items": 1, "total": 1, "timestamp": 1}
+    )
     sales = {}
     for itemrow in items:
-        date = datetime.fromtimestamp(
-            itemrow["timestamp"]/1000.0).strftime("%d-%m-%Y")
+        date = datetime.fromtimestamp(itemrow["timestamp"] / 1000.0).strftime(
+            "%d-%m-%Y"
+        )
         if not sales.get(date):
             sales[date] = {"_total": 0}
         sales[date]["_total"] += itemrow["total"]
@@ -1307,13 +1360,11 @@ def getItemStatistics():
             if k == "_total":
                 continue
             items.append({"name": k, "quantity": v})
-        response.append(
-            {"date": key, "items": items, "total": values["_total"]}
-        )
+        response.append({"date": key, "items": items, "total": values["_total"]})
     return jsonify({"stats": response})
 
 
-@app.route('/wizard/generateItemStatistics', methods=['GET'])
+@app.route("/wizard/generateItemStatistics", methods=["GET"])
 @cross_origin()
 def generateItemStatistics():
     token = request.headers["Authorization"]
@@ -1325,14 +1376,13 @@ def generateItemStatistics():
     endms = int(request.args.get("endms"))
     query = {"customerEmail": email}
     if startms and endms:
-        query["timestamp"] = {"$gt":  startms, "$lt": endms}
-    items = mongo.db.shopping_orders.find(
-        query, {"_id": 0, "items": 1})
+        query["timestamp"] = {"$gt": startms, "$lt": endms}
+    items = mongo.db.shopping_orders.find(query, {"_id": 0, "items": 1})
     sales = {}
     for itemrow in items:
         for item in itemrow["items"]:
             name = item["itemName"]
-            sales[name] = sales.get(name, 0)+item["qty"]
+            sales[name] = sales.get(name, 0) + item["qty"]
     if sales:
         max_sales = max(sales, key=sales.get)
         return jsonify({"sales": sales, "max_sales_item": max_sales})
@@ -1358,60 +1408,60 @@ def checkPaymentStatus():
     orderId = request.args.get("orderId")
     if orderId:
         order = mongo.db.shopping_orders.find_one(
-            {"orderId": orderId},
-            {"_id": 0, "status": 1, "orderId": 1})
+            {"orderId": orderId}, {"_id": 0, "status": 1, "orderId": 1}
+        )
         if not order:
             return jsonify({"message": "No such order found"}), 400
         return jsonify(order)
     return jsonify({"message": "No orderId found"}), 400
 
 
-@app.route('/wizard/payuSuccessWizard', methods=['POST'])
+@app.route("/wizard/payuSuccessWizard", methods=["POST"])
 @cross_origin()
 def payuSuccessWizard():
     # date = int(round(time.time() * 1000))
-    bank_ref_num = request.form['bank_ref_num']
-    mihpayid = request.form['mihpayid']
-    transaction_id = request.form['txnid']
-    txn_data = mongo.db.hash_map_wizard.find_one(
-        {"transaction_id": transaction_id})
-    mongo.db.hash_map_wizard.update_one({"transaction_id": transaction_id}, {
-        "$set": {
-            "status": 1,
-            "bank_ref_num": bank_ref_num,
-            "mihpayid": mihpayid
-        }
-    })
-    mongo.db.shopping_orders.update_one({"orderId": txn_data["orderId"]}, {
-        "$set": {
-            "status": "cnf",
-        }
-    })
+    bank_ref_num = request.form["bank_ref_num"]
+    mihpayid = request.form["mihpayid"]
+    transaction_id = request.form["txnid"]
+    txn_data = mongo.db.hash_map_wizard.find_one({"transaction_id": transaction_id})
+    mongo.db.hash_map_wizard.update_one(
+        {"transaction_id": transaction_id},
+        {"$set": {"status": 1, "bank_ref_num": bank_ref_num, "mihpayid": mihpayid}},
+    )
+    mongo.db.shopping_orders.update_one(
+        {"orderId": txn_data["orderId"]},
+        {
+            "$set": {
+                "status": "cnf",
+            }
+        },
+    )
     mongo.db.shopping_cart.delete_one({"email": txn_data["email"]})
-    return render_template('index.html')
+    return render_template("index.html")
 
 
-@app.route('/wizard/payuFailureWizard', methods=['POST'])
+@app.route("/wizard/payuFailureWizard", methods=["POST"])
 @cross_origin()
 def payuFailureWizard():
-    transaction_id = request.form['txnid']
+    transaction_id = request.form["txnid"]
     txn_data = mongo.db.hash_map_wizard.find_one_and_update(
-        {"transaction_id": transaction_id},
-        {"$set": {
-            "status": -1
-        }})
-    mongo.db.shopping_orders.update_one({"orderId": txn_data["orderId"]}, {
-        "$set": {
-            "status": "fail",
-        }
-    })
-    return render_template('fail.html')
+        {"transaction_id": transaction_id}, {"$set": {"status": -1}}
+    )
+    mongo.db.shopping_orders.update_one(
+        {"orderId": txn_data["orderId"]},
+        {
+            "$set": {
+                "status": "fail",
+            }
+        },
+    )
+    return render_template("fail.html")
 
 
-@app.route('/wizard/initiateMandate', methods=['POST'])
+@app.route("/wizard/initiateMandate", methods=["POST"])
 @cross_origin()
 def initiateMandate():
-    uid = request.json.get('customerId')
+    uid = request.json.get("customerId")
     user_data = mongo.db.device_ids.find_one({"device_id": uid})
     device_data = mongo.db.devices.find_one({"uid": uid})
     model_data = mongo.db.models.find_one({"uid": user_data["model_uid"]})
@@ -1420,24 +1470,31 @@ def initiateMandate():
     # order_id = "OREDRID_98765"
     print(order_id)
     callback = "https://epanipuricart.com/wizard/mandateCallBack"
-    activation_date = datetime.strptime(
-        device_data["activeDate"], "%m-%d-%Y")
+    activation_date = datetime.strptime(device_data["activeDate"], "%m-%d-%Y")
     date_obj = activation_date + relativedelta(years=3)
     exp_date = date_obj.strftime("%Y-%m-%d")
     print(exp_date)
-    tok = create_paytm_token(mid, order_id, callback,
-                             exp_date, "100.00", uid, mkey, datetime.now().strftime("%Y-%m-%d"))
+    tok = create_paytm_token(
+        mid,
+        order_id,
+        callback,
+        exp_date,
+        "100.00",
+        uid,
+        mkey,
+        datetime.now().strftime("%Y-%m-%d"),
+    )
     tok["orderId"] = order_id
     return jsonify(tok)
 
 
-@app.route('/wizard/mandateCallBack', methods=['POST'])
+@app.route("/wizard/mandateCallBack", methods=["POST"])
 @cross_origin()
 def mandateCallBack():
     print("mandate success")
-    print('form', request.form)
-    print('json', request.json)
-    return render_template('index.html')
+    print("form", request.form)
+    print("json", request.json)
+    return render_template("index.html")
 
 
 @app.route("/wizard/getStuffingStatus", methods=["GET"])
@@ -1446,8 +1503,8 @@ def getStuffingStatus():
     stuffingDeviceId = request.args.get("stuffingDeviceId")
     if stuffingDeviceId:
         deviceData = mongo.db.stuffing_devices.find_one(
-            {"stuffingDeviceId": stuffingDeviceId},
-            {"_id": 0})
+            {"stuffingDeviceId": stuffingDeviceId}, {"_id": 0}
+        )
         if not deviceData:
             return jsonify({"message": "No such device found"}), 400
         return jsonify(deviceData)
@@ -1458,9 +1515,10 @@ def getStuffingStatus():
 @cross_origin()
 def changeSetting(id):
     value = id
-    stuffingDeviceId = request.json['stuffingDeviceId']
-    mongo.db.stuffing_devices.update_one({"stuffingDeviceId": stuffingDeviceId},
-                                         {"$set": {"setting": value}})
+    stuffingDeviceId = request.json["stuffingDeviceId"]
+    mongo.db.stuffing_devices.update_one(
+        {"stuffingDeviceId": stuffingDeviceId}, {"$set": {"setting": value}}
+    )
     return jsonify({"message": "Success"}), 200
 
 
@@ -1468,9 +1526,10 @@ def changeSetting(id):
 @cross_origin()
 def grinding(id):
     status = int(id)
-    stuffingDeviceId = request.json['stuffingDeviceId']
-    mongo.db.stuffing_devices.update_one({"stuffingDeviceId": stuffingDeviceId},
-                                         {"$set": {"appGrindingState": status}})
+    stuffingDeviceId = request.json["stuffingDeviceId"]
+    mongo.db.stuffing_devices.update_one(
+        {"stuffingDeviceId": stuffingDeviceId}, {"$set": {"appGrindingState": status}}
+    )
     return jsonify({"message": "Success"}), 200
 
 
@@ -1478,66 +1537,75 @@ def grinding(id):
 @cross_origin()
 def dispensing(id):
     status = int(id)
-    stuffingDeviceId = request.json['stuffingDeviceId']
-    mongo.db.stuffing_devices.update_one({"stuffingDeviceId": stuffingDeviceId},
-                                         {"$set": {"appDispensingState": status}})
+    stuffingDeviceId = request.json["stuffingDeviceId"]
+    mongo.db.stuffing_devices.update_one(
+        {"stuffingDeviceId": stuffingDeviceId}, {"$set": {"appDispensingState": status}}
+    )
     return jsonify({"message": "Success"}), 200
 
 
 @app.route("/wizard/sendStuffingSensorValues", methods=["POST"])
 @cross_origin()
 def sendStuffingSensorValues():
-    stuffingDeviceId = request.json['stuffingDeviceId']
-    temp = request.json['temp']
-    tds = request.json['tds']
-    ph = request.json['ph']
-    mongo.db.stuffing_sensor.insert_one({"stuffingDeviceId": stuffingDeviceId,
-                                         "temp": temp, "tds": tds, "ph": ph,
-                                         "created_date": datetime.now().strftime("%m-%d-%Y")})
+    stuffingDeviceId = request.json["stuffingDeviceId"]
+    temp = request.json["temp"]
+    tds = request.json["tds"]
+    ph = request.json["ph"]
+    mongo.db.stuffing_sensor.insert_one(
+        {
+            "stuffingDeviceId": stuffingDeviceId,
+            "temp": temp,
+            "tds": tds,
+            "ph": ph,
+            "created_date": datetime.now().strftime("%m-%d-%Y"),
+        }
+    )
     return jsonify({"message": "Success"}), 200
 
 
 @app.route("/wizard/getLatestStuffingSensorValues", methods=["GET"])
 @cross_origin()
 def getLatestStuffingSensorValues():
-    stuffingDeviceId = request.args['stuffingDeviceId']
-    data = list(mongo.db.stuffing_sensor.find(
-        {"stuffingDeviceId": stuffingDeviceId}, {"_id": 0}))
+    stuffingDeviceId = request.args["stuffingDeviceId"]
+    data = list(
+        mongo.db.stuffing_sensor.find(
+            {"stuffingDeviceId": stuffingDeviceId}, {"_id": 0}
+        )
+    )
     result = data[-1]
     return jsonify(result), 200
+
 
 @app.route("/wizard/getFlavourNames", methods=["GET"])
 @cross_origin()
 def getFlavourNames():
-    uid = request.args.get('deviceId')
-    data = mongo.db.flavours.find_one(
-        {"device_id": uid}, {"_id": 0})
+    uid = request.args.get("deviceId")
+    data = mongo.db.flavours.find_one({"device_id": uid}, {"_id": 0})
     if data:
         return jsonify(data)
     else:
         return jsonify({})
-    
+
+
 @app.route("/wizard/updateFlavourNames", methods=["POST"])
 @cross_origin()
 def updateFlavourNames():
-    uid = request.json.get('deviceId')
-    flavour1 = request.json.get('flavour1')
-    flavour2 = request.json.get('flavour2')
-    flavour3 = request.json.get('flavour3')
-    mongo.db.flavours.update_one({"device_id":uid},{"$set": {"flavour1":flavour1,
-                                                             "flavour2": flavour2,
-                                                               "flavour3":flavour3}},
-                                                                upsert=True)
+    uid = request.json.get("deviceId")
+    flavour1 = request.json.get("flavour1")
+    flavour2 = request.json.get("flavour2")
+    flavour3 = request.json.get("flavour3")
+    mongo.db.flavours.update_one(
+        {"device_id": uid},
+        {"$set": {"flavour1": flavour1, "flavour2": flavour2, "flavour3": flavour3}},
+        upsert=True,
+    )
     return jsonify({"message": "Success"})
+
 
 if __name__ == "__main__":
     print("starting...")
     # refresh_zoho_access_token(force=True)
-    serve(
-        app,
-        host=cfg.IOTFlask["HOST"],
-        port=cfg.IOTFlask["PORT"]
-    )
+    serve(app, host=cfg.IOTFlask["HOST"], port=cfg.IOTFlask["PORT"])
     # app.run(
     #     host=cfg.IOTFlask["HOST"],
     #     port=cfg.IOTFlask["PORT"],
